@@ -1,0 +1,39 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Employee {
+  id         Int          @id @default(autoincrement())
+  name       String
+  scores     Score?
+  trendPoints TrendPoint[]
+}
+
+model Score {
+  id         Int      @id @default(autoincrement())
+  employeeId Int      @unique
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  day        Int      @default(75)
+  week       Int      @default(75)
+  month      Int      @default(75)
+  updatedAt  DateTime @default(now()) @updatedAt
+}
+
+model TrendPoint {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  timestamp  DateTime @default(now())
+  score      Int
+}

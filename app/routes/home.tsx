@@ -8,119 +8,117 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
+import { useLoaderData, useNavigation, useSubmit } from "react-router";
+import { db } from "~/lib/db"; // Import db client
 
 // -------------------- Types --------------------
 
 type ViewMode = "day" | "week" | "month";
 
 interface TrendPoint {
-  timestamp: number; // unix ms
+  id: number;
+  employeeId: number;
+  timestamp: string;
   score: number;
+}
+
+interface Score {
+  id: number;
+  employeeId: number;
+  day: number;
+  week: number;
+  month: number;
+  updatedAt: string;
 }
 
 interface Employee {
   id: number;
   name: string;
-  scores: {
-    day: number;
-    week: number;
-    month: number;
-    trend: TrendPoint[];
-  };
-}
-
-// -------------------- Mock data helpers --------------------
-
-const NAMES = [
-  "Alice",
-  "Bob",
-  "Charlie",
-  "Diana",
-  "Ethan",
-  "Fiona",
-  "George",
-  "Hannah",
-  "Ian",
-  "Julia",
-  "Kevin",
-  "Laura",
-  "Michael",
-  "Nancy",
-  "Oscar",
-  "Patricia",
-  "Quincy",
-  "Rachel",
-  "Steve",
-  "Tina",
-];
-
-const randomScore = () => Math.floor(Math.random() * 51) + 50; // 50‑100
-
-const now = () => Date.now();
-
-function makeInitialEmployees(): Employee[] {
-  return NAMES.map((name, i) => ({
-    id: i + 1,
-    name,
-    scores: {
-      day: randomScore(),
-      week: randomScore(),
-      month: randomScore(),
-      trend: Array.from({ length: 30 }, (_, k) => ({
-        timestamp: now() - (29 - k) * 3600_000,
-        score: randomScore(),
-      })),
-    },
-  }));
-}
-
-function bumpScores(prev: Employee[]): Employee[] {
-  return prev.map((emp) => {
-    const delta = () => (Math.random() < 0.5 ? -1 : 1) * Math.floor(Math.random() * 4);
-    const newDay = clamp(emp.scores.day + delta());
-    const newWeek = clamp(emp.scores.week + delta());
-    const newMonth = clamp(emp.scores.month + delta());
-    return {
-      ...emp,
-      scores: {
-        day: newDay,
-        week: newWeek,
-        month: newMonth,
-        trend: [
-          ...emp.scores.trend.slice(-29),
-          { timestamp: now(), score: newDay },
-        ],
-      },
-    };
-  });
-}
-
-function clamp(n: number) {
-  return Math.max(0, Math.min(100, n));
+  scores: Score;
+  trendPoints: TrendPoint[];
 }
 
 // -------------------- Component --------------------
 
-export default function EmployeePerformanceDashboard() {
-  const [view, setView] = useState<ViewMode>("day");
-  const [employees, setEmployees] = useState<Employee[]>(makeInitialEmployees);
+// Fetch data directly in the loader
+export async function loader() {
+  const employees = await db.employee.findMany({
+    include: {
+      scores: true,
+      trendPoints: {
+        orderBy: {
+          timestamp: "asc",
+        },
+      },
+    },
+  });
+  // Return the raw data - React Router will handle serialization
+  return employees;
+}
 
-  // Auto‑refresh every 30 min (use quicker 60s in dev)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setEmployees((prev) => bumpScores(prev));
-    }, 60_000); // change to 1_800_000 for prod
-    return () => clearInterval(interval);
-  }, []);
+export default function EmployeePerformanceDashboard() {
+  const employees = useLoaderData() as Employee[];
+  const navigation = useNavigation();
+  const submit = useSubmit();
+  const [view, setView] = useState<ViewMode>("day");
+  const [newEmployeeName, setNewEmployeeName] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  // When changing score, submit to the API
+  const updateScore = async (employeeId: number, change: 1 | -1) => {
+    submit(
+      { view, change },
+      {
+        method: "post",
+        action: `/api/employees/${employeeId}`,
+        encType: "application/json",
+        navigate: false,
+      }
+    );
+  };
+
+  // Add new employee
+  const addEmployee = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newEmployeeName.trim() === "") return;
+    
+    submit(
+      { name: newEmployeeName },
+      {
+        method: "post",
+        action: "/api/employees/create",
+        encType: "application/json",
+        navigate: false,
+      }
+    );
+    
+    setNewEmployeeName("");
+    setShowAddForm(false);
+  };
+
+  // Delete employee
+  const deleteEmployee = (id: number) => {
+    if (confirm("Are you sure you want to remove this employee?")) {
+      submit(
+        {},
+        {
+          method: "delete",
+          action: `/api/employees/delete/${id}`,
+          navigate: false,
+        }
+      );
+    }
+  };
 
   const trendData = (() => {
     // Average trend across employees for the chart
-    const pointsMap: Record<number, { total: number; count: number }> = {};
+    const pointsMap: Record<string, { total: number; count: number }> = {};
     employees.forEach((e) => {
-      e.scores.trend.forEach((pt) => {
-        pointsMap[pt.timestamp] = pointsMap[pt.timestamp] || { total: 0, count: 0 };
-        pointsMap[pt.timestamp].total += pt.score;
-        pointsMap[pt.timestamp].count += 1;
+      e.trendPoints.forEach((pt) => {
+        const ts = new Date(pt.timestamp).getTime();
+        pointsMap[ts] = pointsMap[ts] || { total: 0, count: 0 };
+        pointsMap[ts].total += pt.score;
+        pointsMap[ts].count += 1;
       });
     });
     return Object.entries(pointsMap)
@@ -137,12 +135,23 @@ export default function EmployeePerformanceDashboard() {
   const bgColor = (score: number) =>
     score >= 75 ? "bg-green-700/50" : score >= 60 ? "bg-yellow-700/50" : "bg-red-700/50";
 
+  const isLoading = navigation.state === "loading";
+
   return (
     <div className="min-h-screen bg-slate-900 text-white p-8 overflow-hidden">
       <header className="flex items-center gap-4 mb-8">
         <h1 className="text-4xl lg:text-6xl font-bold mr-auto select-none">
           Employee Performance
         </h1>
+        
+        {/* Add employee toggle button */}
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-xl"
+        >
+          {showAddForm ? "Cancel" : "Add Employee"}
+        </button>
+        
         <button
           onClick={() => document.documentElement.requestFullscreen()}
           className="px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-xl lg:text-2xl"
@@ -150,6 +159,28 @@ export default function EmployeePerformanceDashboard() {
           ⛶ Fullscreen
         </button>
       </header>
+
+      {/* Add employee form */}
+      {showAddForm && (
+        <form onSubmit={addEmployee} className="mb-6 flex gap-4">
+          <input
+            type="text"
+            value={newEmployeeName}
+            onChange={(e) => setNewEmployeeName(e.target.value)}
+            placeholder="Employee name"
+            className="px-4 py-3 rounded-xl bg-slate-800 text-white text-xl flex-grow"
+            disabled={navigation.state === "submitting"}
+            autoFocus
+          />
+          <button
+            type="submit"
+            disabled={navigation.state === "submitting" || newEmployeeName.trim() === ""}
+            className="px-6 py-3 rounded-xl bg-green-600 hover:bg-green-700 disabled:bg-slate-700 disabled:opacity-50 text-xl"
+          >
+            Add
+          </button>
+        </form>
+      )}
 
       {/* View Toggle */}
       <div className="flex gap-4 mb-6">
@@ -165,7 +196,7 @@ export default function EmployeePerformanceDashboard() {
       </div>
 
       {/* Employee Grid */}
-      <section className="grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-2 gap-4 mb-12">
+      <section className={`grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-2 gap-4 mb-12 ${navigation.state === "loading" ? "opacity-50" : ""}`}>
         {employees.map((emp) => {
           const score = emp.scores[view];
           return (
@@ -173,6 +204,15 @@ export default function EmployeePerformanceDashboard() {
               key={emp.id}
               className={`rounded-3xl p-6 flex flex-col items-center justify-center ${bgColor(score)}`}
             >
+              {/* Remove employee button */}
+              <button
+                onClick={() => deleteEmployee(emp.id)}
+                className="self-end text-slate-300 hover:text-white opacity-60 hover:opacity-100 mb-1"
+                aria-label={`Remove ${emp.name}`}
+              >
+                ✕
+              </button>
+              
               <span className="text-xl lg:text-2xl font-semibold mb-1 select-none">
                 {emp.name}
               </span>
@@ -184,6 +224,26 @@ export default function EmployeePerformanceDashboard() {
               <span className="mt-1 text-base lg:text-lg opacity-70 select-none">
                 {view.toUpperCase()}
               </span>
+              
+              {/* Score Controls */}
+              <div className="flex gap-2 mt-3">
+                <button 
+                  onClick={() => updateScore(emp.id, -1)}
+                  disabled={navigation.state === "submitting" || score <= 0}
+                  className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-10 h-10 rounded-full flex items-center justify-center"
+                  aria-label={`Decrease ${emp.name}'s score`}
+                >
+                  <span className="text-2xl font-bold">-</span>
+                </button>
+                <button 
+                  onClick={() => updateScore(emp.id, 1)}
+                  disabled={navigation.state === "submitting" || score >= 100}
+                  className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-10 h-10 rounded-full flex items-center justify-center"
+                  aria-label={`Increase ${emp.name}'s score`}
+                >
+                  <span className="text-2xl font-bold">+</span>
+                </button>
+              </div>
             </div>
           );
         })}
