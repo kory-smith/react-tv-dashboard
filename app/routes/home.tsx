@@ -40,6 +40,18 @@ const NAMES = [
   "Fiona",
   "George",
   "Hannah",
+  "Ian",
+  "Julia",
+  "Kevin",
+  "Laura",
+  "Michael",
+  "Nancy",
+  "Oscar",
+  "Patricia",
+  "Quincy",
+  "Rachel",
+  "Steve",
+  "Tina",
 ];
 
 const randomScore = () => Math.floor(Math.random() * 51) + 50; // 50‑100
@@ -153,23 +165,23 @@ export default function EmployeePerformanceDashboard() {
       </div>
 
       {/* Employee Grid */}
-      <section className="grid xl:grid-cols-4 lg:grid-cols-3 sm:grid-cols-2 gap-6 mb-12">
+      <section className="grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-2 gap-4 mb-12">
         {employees.map((emp) => {
           const score = emp.scores[view];
           return (
             <div
               key={emp.id}
-              className={`rounded-3xl p-8 flex flex-col items-center justify-center ${bgColor(score)}`}
+              className={`rounded-3xl p-6 flex flex-col items-center justify-center ${bgColor(score)}`}
             >
-              <span className="text-2xl lg:text-3xl font-semibold mb-2 select-none">
+              <span className="text-xl lg:text-2xl font-semibold mb-1 select-none">
                 {emp.name}
               </span>
               <span
-                className={`text-5xl lg:text-6xl font-extrabold ${scoreColor(score)} select-none`}
+                className={`text-4xl lg:text-5xl font-extrabold ${scoreColor(score)} select-none`}
               >
                 {score}
               </span>
-              <span className="mt-2 text-lg lg:text-xl opacity-70 select-none">
+              <span className="mt-1 text-base lg:text-lg opacity-70 select-none">
                 {view.toUpperCase()}
               </span>
             </div>
