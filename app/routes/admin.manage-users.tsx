@@ -167,7 +167,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
             if (existingUser) {
                 return json({ error: `User with email ${email} already exists.`, formValues: body } satisfies ActionData, { status: 409 }); // 409 Conflict
             }
-            const existingEmployee = await db.employee.findUnique({ where: { name } });
+            const existingEmployee = await db.employee.findFirst({ where: { name } });
              if (existingEmployee) {
                 return json({ error: `Employee with name ${name} already exists.`, formValues: body } satisfies ActionData, { status: 409 }); // 409 Conflict
             }

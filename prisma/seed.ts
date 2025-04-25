@@ -47,13 +47,6 @@ async function main() {
     });
     
     if (!user) {
-        // Check if employee name exists
-        const existingEmployeeName = await prisma.employee.findFirst({ where: { name: mock.name }});
-        if (existingEmployeeName) {
-            console.warn(`Skipping user ${mock.email}: An employee named ${mock.name} already exists.`);
-            continue; // Skip if employee name is found
-        }
-        
         // Hash password
         const hashedPassword = await bcrypt.hash(mock.password, 10);
         
