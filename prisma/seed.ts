@@ -41,18 +41,17 @@ async function main() {
   console.log(`Seeding employee/manager users...`);
   for (const mock of MOCK_EMPLOYEES) {
     // Check if user exists, include relations
-    let user = await prisma.user.findUnique({
-       where: { email: mock.email },
+    let user = await prisma.user.findUnique({ where: { email: mock.email },
        // Let prisma infer the type based on include
        include: { employee: { include: { scores: true } } } 
     });
     
     if (!user) {
-        // Check if employee name exists (should be unique)
-        const existingEmployeeName = await prisma.employee.findUnique({ where: { name: mock.name }});
+        // Check if employee name exists
+        const existingEmployeeName = await prisma.employee.findFirst({ where: { name: mock.name }});
         if (existingEmployeeName) {
-            console.warn(`Skipping user ${mock.email}: Employee name ${mock.name} already exists.`);
-            continue; // Skip if employee name is taken
+            console.warn(`Skipping user ${mock.email}: An employee named ${mock.name} already exists.`);
+            continue; // Skip if employee name is found
         }
         
         // Hash password

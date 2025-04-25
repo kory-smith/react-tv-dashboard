@@ -32,7 +32,7 @@ model User {
 
 model Employee {
   id         Int          @id @default(autoincrement())
-  name       String       @unique // Ensure employee names are unique
+  name       String
   wrongNumbers Int        @default(0)
   scores     Score?
   trendPoints TrendPoint[]
