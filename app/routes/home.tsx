@@ -73,10 +73,6 @@ export default function EmployeePerformanceDashboard() {
   // Get user and flags from Outlet context
   const { user, isAdmin, isManager } = useOutletContext<OutletContextType>();
 
-  // --- DEBUGGING --- 
-  console.log("Loaded Employees:", JSON.stringify(employees, null, 2));
-  // --- END DEBUGGING ---
-
   const navigation = useNavigation();
   const submit = useSubmit();
   const [view, setView] = useState<ViewMode>("day");
@@ -174,9 +170,6 @@ export default function EmployeePerformanceDashboard() {
       }))
       .sort((a, b) => a.ts - b.ts);
       
-    // --- DEBUGGING --- 
-    console.log("Calculated Trend Data:", JSON.stringify(calculatedTrendData, null, 2));
-    // --- END DEBUGGING ---
     return calculatedTrendData;
   })();
 
