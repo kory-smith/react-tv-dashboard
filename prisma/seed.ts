@@ -7,9 +7,11 @@ const prisma = new PrismaClient();
 
 // --- Mock Data ---
 const MOCK_EMPLOYEES = [
-  { name: "Alice", email: "alice@example.com", password: "password123" },
-  { name: "Bob", email: "bob@example.com", password: "password123" },
-  { name: "Charlie", email: "charlie@example.com", password: "password123" },
+  { name: "Alice", email: "alice@example.com", password: "password123", role: Role.EMPLOYEE },
+  { name: "Bob", email: "bob@example.com", password: "password123", role: Role.EMPLOYEE },
+  { name: "Charlie", email: "charlie@example.com", password: "password123", role: Role.EMPLOYEE },
+  { name: "Diana Manager", email: "diana@example.com", password: "password123", role: Role.MANAGER },
+  { name: "Ethan Employee", email: "ethan@example.com", password: "password123", role: Role.EMPLOYEE },
   // Add more mock employees as needed
 ];
 
@@ -35,8 +37,8 @@ async function main() {
     console.log(`Created admin user: ${adminUser.email}`);
   }
 
-  // --- Create Regular Employee Users (if they don't exist) ---
-  console.log(`Seeding regular employee users...`);
+  // --- Create Regular Employee/Manager Users (if they don't exist) ---
+  console.log(`Seeding employee/manager users...`);
   for (const mock of MOCK_EMPLOYEES) {
     // Check if user exists, include relations
     let user = await prisma.user.findUnique({
@@ -63,7 +65,7 @@ async function main() {
                 data: {
                     email: mock.email,
                     hashedPassword: hashedPassword,
-                    role: Role.EMPLOYEE,
+                    role: mock.role,
                     // Create the linked Employee record at the same time
                     employee: {
                         create: {

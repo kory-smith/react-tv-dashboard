@@ -8,10 +8,11 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
-import { useLoaderData, useNavigation, useSubmit, useOutletContext } from "react-router";
+import { useLoaderData, useNavigation, useSubmit, useOutletContext, useSearchParams } from "react-router";
 import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { db } from "~/lib/db"; // Import db client
 import { type User } from "@prisma/client"; // Import User type
+import { Role } from "@prisma/client"; // Import Role enum
 
 // -------------------- Types --------------------
 
@@ -54,6 +55,12 @@ type OutletContextType = {
 // Fetch data directly in the loader, DO NOT require authentication
 export async function loader({ request }: LoaderFunctionArgs) {
   const employees = await db.employee.findMany({
+    // Filter to include only employees linked to a user with the EMPLOYEE role
+    where: {
+      user: {
+        role: Role.EMPLOYEE // Assuming Role enum is available or import it
+      }
+    },
     include: {
       scores: true,
       trendPoints: {
@@ -75,9 +82,12 @@ export default function EmployeePerformanceDashboard() {
 
   const navigation = useNavigation();
   const submit = useSubmit();
+  // Get search params to check for showAdd
+  const [searchParams] = useSearchParams();
   const [view, setView] = useState<ViewMode>("day");
   const [newEmployeeName, setNewEmployeeName] = useState("");
-  const [showAddForm, setShowAddForm] = useState(false);
+  // Default showAddForm based on query parameter
+  const [showAddForm, setShowAddForm] = useState(searchParams.get("showAdd") === "true");
 
   // When changing a field, submit to the API
   const updateField = async (employeeId: number, field: 'day' | 'week' | 'month' | 'wrongNumbers', change: 1 | -1) => {
@@ -182,30 +192,7 @@ export default function EmployeePerformanceDashboard() {
   const isLoading = navigation.state === "loading";
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-8 overflow-hidden">
-      <header className="flex items-center gap-4 mb-8">
-        <h1 className="text-4xl lg:text-6xl font-bold mr-auto select-none">
-          Employee Performance
-        </h1>
-        
-        {/* Add employee toggle button (Show only for Admins via context flag) */}
-        {isAdmin && (
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-xl"
-          >
-            {showAddForm ? "Cancel" : "Add Employee"}
-          </button>
-        )}
-        
-        <button
-          onClick={() => document.documentElement.requestFullscreen()}
-          className="px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-xl lg:text-2xl"
-        >
-          ⛶ Fullscreen
-        </button>
-      </header>
-
+    <>
       {/* Add employee form (Show only for Admins via context flag) */}
       {isAdmin && showAddForm && (
         <form onSubmit={addEmployee} className="mb-6 flex gap-4">
@@ -357,6 +344,6 @@ export default function EmployeePerformanceDashboard() {
           </LineChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </>
   );
 }

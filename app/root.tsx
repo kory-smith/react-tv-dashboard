@@ -6,7 +6,8 @@ import {
   Scripts,
   ScrollRestoration,
   useLoaderData,
-  Form
+  Form,
+  Link
 } from "react-router";
 import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { getUser, isAdmin, isManager } from "~/lib/auth.server";
@@ -48,6 +49,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // Explicitly type useLoaderData with LoaderData
   const { user, isAdmin, isManager } = useLoaderData<LoaderData>(); // Get user and flags
 
+  // Helper to display role nicely
+  const getRoleDisplay = (role: string | undefined) => {
+    if (!role) return "";
+    return `(${role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()})`;
+  };
+
   return (
     <html lang="en">
       <head>
@@ -56,20 +63,58 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body className="bg-slate-900">
-        {user && (
-          <header className="absolute top-0 right-0 p-4 z-10">
-            <Form action="/api/logout" method="post">
-              <button 
-                type="submit"
-                className="px-4 py-2 rounded bg-slate-700 text-white hover:bg-slate-600 text-sm"
+      <body className="bg-slate-900 text-white">
+        {/* Unified Header */}
+        <header className="p-4 sm:p-6 md:p-8 flex flex-wrap items-center justify-between gap-4 mb-4 sm:mb-6 md:mb-8 border-b border-slate-700/50">
+          {/* Title - Link to home */}
+          <Link to="/" className="text-3xl lg:text-4xl font-bold select-none hover:text-slate-300 transition-colors">
+            Employee Performance
+          </Link>
+
+          {/* Right-side actions & User Info */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            {/* Conditionally render Add Employee button via Link (to avoid Form nesting) */}
+            {isAdmin && (
+              <Link
+                to="/?showAdd=true" // Use query param to trigger form in home.tsx (needs update)
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-base sm:text-lg whitespace-nowrap"
               >
-                Logout ({user.email})
-              </button>
-            </Form>
-          </header>
-        )}
-        <Outlet context={{ user, isAdmin, isManager }} />
+                Add Employee
+              </Link>
+            )}
+
+            <button
+              onClick={() => document.documentElement.requestFullscreen()}
+              className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-base sm:text-lg whitespace-nowrap"
+            >
+              <span className="hidden sm:inline">Fullscreen</span>
+              <span className="sm:hidden">⛶</span>
+            </button>
+
+            {/* User Info & Logout */}
+            {user && (
+              <div className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-4 border-l border-slate-700/50">
+                <span className="text-sm sm:text-base text-slate-300 whitespace-nowrap">
+                  {user.email} <span className="text-xs sm:text-sm text-slate-400">{getRoleDisplay(user.role)}</span>
+                </span>
+                <Form action="/api/logout" method="post">
+                  <button 
+                    type="submit"
+                    className="px-3 sm:px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm sm:text-base whitespace-nowrap"
+                  >
+                    Logout
+                  </button>
+                </Form>
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* Main Content Area */}
+        <main className="px-4 sm:px-6 md:px-8">
+            <Outlet context={{ user, isAdmin, isManager }} />
+        </main>
+
         <ScrollRestoration />
         <Scripts />
       </body>
