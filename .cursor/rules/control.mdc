@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+When I provide a request that involves multiple steps, modifications across several files, significant logic changes, or seems potentially ambiguous:
+
+1.  **Analyze First:** Carefully analyze the request. Identify the core objectives, potential ambiguities, and any missing information.
+2.  **Propose a Plan:** Before writing any code, present a clear, step-by-step plan outlining how you intend to fulfill the request. This plan should include:
+    * The specific files you plan to create or modify.
+    * A summary of the key changes or additions proposed for each file.
+    * Any major functions, classes, or logic blocks you intend to implement or alter.
+    * Any assumptions you are making based on my request.
+3.  **Ask for Clarification:** If the request is unclear or you need more information to proceed confidently, explicitly list the questions you have.
+4.  **Wait for Confirmation:** **Do not proceed with generating or modifying code.** Wait for me to explicitly confirm, modify, or reject the proposed plan (e.g., by me saying "Proceed with the plan", "Yes, looks good", or providing feedback).
+
+Only proceed with implementation *after* I have approved your plan. For very simple, single-file, unambiguous tasks, you may state that you are proceeding directly because the request is straightforward.

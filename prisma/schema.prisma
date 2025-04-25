@@ -13,12 +13,30 @@ datasource db {
   url      = "file:./dev.db"
 }
 
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
+  hashedPassword String
+  role           Role      @default(EMPLOYEE)
+  employeeId     Int?      @unique // Optional: A user might be an admin/manager without being an employee
+  employee       Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull) // If employee is deleted, set user.employeeId to null
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
 model Employee {
   id         Int          @id @default(autoincrement())
-  name       String
+  name       String       @unique // Ensure employee names are unique
   wrongNumbers Int        @default(0)
   scores     Score?
   trendPoints TrendPoint[]
+  user       User?        // Link back to the User model
 }
 
 model Score {

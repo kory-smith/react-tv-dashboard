@@ -8,8 +8,10 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
-import { useLoaderData, useNavigation, useSubmit } from "react-router";
+import { useLoaderData, useNavigation, useSubmit, useOutletContext } from "react-router";
+import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { db } from "~/lib/db"; // Import db client
+import { type User } from "@prisma/client"; // Import User type
 
 // -------------------- Types --------------------
 
@@ -39,10 +41,18 @@ interface Employee {
   trendPoints: TrendPoint[];
 }
 
+// --- Context Type ---
+// Update context type to include flags from root loader
+type OutletContextType = { 
+  user: User | null; 
+  isAdmin: boolean; 
+  isManager: boolean; 
+};
+
 // -------------------- Component --------------------
 
-// Fetch data directly in the loader
-export async function loader() {
+// Fetch data directly in the loader, DO NOT require authentication
+export async function loader({ request }: LoaderFunctionArgs) {
   const employees = await db.employee.findMany({
     include: {
       scores: true,
@@ -58,7 +68,9 @@ export async function loader() {
 }
 
 export default function EmployeePerformanceDashboard() {
-  const employees = useLoaderData() as Employee[];
+  const employees = useLoaderData<typeof loader>();
+  // Get user and flags from Outlet context
+  const { user, isAdmin, isManager } = useOutletContext<OutletContextType>();
   const navigation = useNavigation();
   const submit = useSubmit();
   const [view, setView] = useState<ViewMode>("day");
@@ -97,8 +109,12 @@ export default function EmployeePerformanceDashboard() {
     setShowAddForm(false);
   };
 
-  // Delete employee
+  // Delete employee (Check if user is Admin via context flag)
   const deleteEmployee = (id: number) => {
+    if (!isAdmin) { // Use flag from context
+        alert("Only Admins can delete employees.");
+        return;
+    }
     if (confirm("Are you sure you want to remove this employee?")) {
       submit(
         {},
@@ -145,13 +161,15 @@ export default function EmployeePerformanceDashboard() {
           Employee Performance
         </h1>
         
-        {/* Add employee toggle button */}
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-xl"
-        >
-          {showAddForm ? "Cancel" : "Add Employee"}
-        </button>
+        {/* Add employee toggle button (Show only for Admins via context flag) */}
+        {isAdmin && (
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-xl"
+          >
+            {showAddForm ? "Cancel" : "Add Employee"}
+          </button>
+        )}
         
         <button
           onClick={() => document.documentElement.requestFullscreen()}
@@ -161,8 +179,8 @@ export default function EmployeePerformanceDashboard() {
         </button>
       </header>
 
-      {/* Add employee form */}
-      {showAddForm && (
+      {/* Add employee form (Show only for Admins via context flag) */}
+      {isAdmin && showAddForm && (
         <form onSubmit={addEmployee} className="mb-6 flex gap-4">
           <input
             type="text"
@@ -199,21 +217,27 @@ export default function EmployeePerformanceDashboard() {
       {/* Employee Grid */}
       <section className={`grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-2 gap-4 mb-12 ${navigation.state === "loading" ? "opacity-50" : ""}`}>
         {employees.map((emp) => {
-          const score = emp.scores[view];
+          // Safely access score, default to 0 if scores object is null
+          const score = emp.scores?.[view] ?? 0;
           const wrongNumbers = emp.wrongNumbers;
+          // Determine background color based on potentially defaulted score
+          const currentBgColor = emp.scores ? bgColor(score) : "bg-slate-700/50"; // Use default gray if no score data
+
           return (
             <div
               key={emp.id}
-              className={`rounded-3xl p-6 flex flex-col items-center justify-center ${bgColor(score)}`}
+              className={`rounded-3xl p-6 flex flex-col items-center justify-center ${currentBgColor}`}
             >
-              {/* Remove employee button */}
-              <button
-                onClick={() => deleteEmployee(emp.id)}
-                className="self-end text-slate-300 hover:text-white opacity-60 hover:opacity-100 mb-1"
-                aria-label={`Remove ${emp.name}`}
-              >
-                ✕
-              </button>
+              {/* Remove employee button (Show only for Admins via context flag) */}
+              {isAdmin && (
+                  <button
+                    onClick={() => deleteEmployee(emp.id)}
+                    className="absolute top-2 right-2 text-slate-300 hover:text-white opacity-60 hover:opacity-100 p-1 rounded-full bg-black/20 hover:bg-black/40"
+                    aria-label={`Remove ${emp.name}`}
+                  >
+                    ✕
+                  </button>
+              )}
               
               <span className="text-xl lg:text-2xl font-semibold mb-1 select-none">
                 {emp.name}
@@ -227,49 +251,57 @@ export default function EmployeePerformanceDashboard() {
                 {view.toUpperCase()}
               </span>
               
-              {/* Score Controls */}
-              <div className="flex gap-2 mt-3">
-                <button 
-                  onClick={() => updateField(emp.id, view, -1)}
-                  disabled={navigation.state === "submitting" || score <= 0}
-                  className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-10 h-10 rounded-full flex items-center justify-center"
-                  aria-label={`Decrease ${emp.name}'s ${view} score`}
-                >
-                  <span className="text-2xl font-bold">-</span>
-                </button>
-                <button 
-                  onClick={() => updateField(emp.id, view, 1)}
-                  disabled={navigation.state === "submitting" || score >= 100}
-                  className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-10 h-10 rounded-full flex items-center justify-center"
-                  aria-label={`Increase ${emp.name}'s ${view} score`}
-                >
-                  <span className="text-2xl font-bold">+</span>
-                </button>
-              </div>
+              {/* Score Controls (Show only if it's the user's own employee record) */}
+              {user?.employeeId === emp.id && (
+                  <div className="flex gap-2 mt-3">
+                    <button 
+                      onClick={() => updateField(emp.id, view, -1)}
+                      disabled={navigation.state === "submitting" || score <= 0}
+                      className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-10 h-10 rounded-full flex items-center justify-center"
+                      aria-label={`Decrease ${emp.name}'s ${view} score`}
+                    >
+                      <span className="text-2xl font-bold">-</span>
+                    </button>
+                    <button 
+                      onClick={() => updateField(emp.id, view, 1)}
+                      disabled={navigation.state === "submitting" || score >= 100}
+                      className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-10 h-10 rounded-full flex items-center justify-center"
+                      aria-label={`Increase ${emp.name}'s ${view} score`}
+                    >
+                      <span className="text-2xl font-bold">+</span>
+                    </button>
+                  </div>
+              )}
 
-              {/* Wrong Numbers Display and Controls */}
+              {/* Wrong Numbers Display and Controls (Show controls only for Managers/Admins via context flag) */}
               <div className="mt-4 text-center">
                 <span className="text-sm opacity-70 select-none">WRONG #'s</span>
                 <div className="flex items-center justify-center gap-2 mt-1">
-                  <button
-                    onClick={() => updateField(emp.id, 'wrongNumbers', -1)}
-                    disabled={navigation.state === "submitting" || wrongNumbers <= 0}
-                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-8 h-8 rounded-full flex items-center justify-center text-sm"
-                    aria-label={`Decrease ${emp.name}'s wrong numbers`}
-                  >
-                    <span className="text-xl font-bold">-</span>
-                  </button>
+                  {/* Button only visible if manager via context flag */} 
+                  {isManager && (
+                    <button
+                      onClick={() => updateField(emp.id, 'wrongNumbers', -1)}
+                      disabled={navigation.state === "submitting" || wrongNumbers <= 0}
+                      className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-8 h-8 rounded-full flex items-center justify-center text-sm"
+                      aria-label={`Decrease ${emp.name}'s wrong numbers`}
+                    >
+                      <span className="text-xl font-bold">-</span>
+                    </button>
+                  )}
                   <span className="text-xl font-semibold select-none min-w-[2ch]">
                     {wrongNumbers}
                   </span>
-                  <button
-                    onClick={() => updateField(emp.id, 'wrongNumbers', 1)}
-                    disabled={navigation.state === "submitting"}
-                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-8 h-8 rounded-full flex items-center justify-center text-sm"
-                    aria-label={`Increase ${emp.name}'s wrong numbers`}
-                  >
-                    <span className="text-xl font-bold">+</span>
-                  </button>
+                  {/* Button only visible if manager via context flag */} 
+                  {isManager && (
+                    <button
+                      onClick={() => updateField(emp.id, 'wrongNumbers', 1)}
+                      disabled={navigation.state === "submitting"}
+                      className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-8 h-8 rounded-full flex items-center justify-center text-sm"
+                      aria-label={`Increase ${emp.name}'s wrong numbers`}
+                    >
+                      <span className="text-xl font-bold">+</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

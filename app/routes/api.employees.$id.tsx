@@ -1,8 +1,13 @@
 import { db } from "~/lib/db";
+import { type ActionFunctionArgs, json } from "@remix-run/node";
+import { requireUser, isManager } from "~/lib/auth.server";
 
-// Handles updating an employee's score
-// PUT /api/employees/:id
-export async function action({ request, params }: { request: Request, params: { id: string } }) {
+// Handles updating an employee's score or wrong numbers
+// POST /api/employees/:id (Changed method to POST as it modifies data)
+export async function action({ request, params }: ActionFunctionArgs) {
+  // Require authenticated user
+  const user = await requireUser(request);
+
   // Validate the ID parameter
   const id = Number(params.id);
   if (isNaN(id)) {
@@ -36,6 +41,11 @@ export async function action({ request, params }: { request: Request, params: { 
     let updatedData;
 
     if (data.field === 'wrongNumbers') {
+      // Authorization: Only managers or admins can update wrongNumbers
+      if (!isManager(user)) {
+          return json({ error: "Forbidden" }, { status: 403 });
+      }
+
       // Update the wrongNumbers count for the employee
       const currentWrongNumbers = employee.wrongNumbers;
       const newWrongNumbers = Math.max(0, currentWrongNumbers + data.change); // Ensure count doesn't go below 0
@@ -46,6 +56,11 @@ export async function action({ request, params }: { request: Request, params: { 
         include: { scores: true }, // Include scores to match return type
       });
     } else {
+      // Authorization: Only the employee themselves can update their score
+      if (user.employeeId !== id) {
+          return json({ error: "Forbidden: You can only update your own score." }, { status: 403 });
+      }
+
       // Update the score for the specified view (day, week, month)
       if (!employee.scores) { // Extra check just in case scores are null
           return new Response("Employee scores not found", { status: 404 });
