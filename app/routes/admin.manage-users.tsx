@@ -27,13 +27,15 @@ type OutletContextType = {
   user: PrismaUser | null; 
 };
 
-// Define a type for all possible return shapes of the action function
+// Updated ActionData type to include password change outcomes
 type ActionData = 
-    | { success: true; deletedUserId: number; newUser?: undefined; error?: undefined; formValues?: undefined } // Delete success
-    | { success: true; newUser: DisplayUser; deletedUserId?: undefined; error?: undefined; formValues?: undefined } // Create success
-    | { error: string; formValues?: { name: string; email: string; role: Role }; success?: undefined; deletedUserId?: undefined; newUser?: undefined } // Create/Validation error with form values
-    | { error: string; success?: undefined; deletedUserId?: undefined; newUser?: undefined; formValues?: undefined } // General error (delete, forbidden, invalid intent)
-    | undefined; // Type if no action has been submitted yet
+    | { success: true; deletedUserId: number; message?: string; } // Delete success
+    | { success: true; newUser: DisplayUser; message?: string; } // Create success
+    | { success: true; updatedUserId: number; message: string; } // Password change success
+    | { error: string; formValues?: { name: string; email: string; role: Role }; } // Create/Validation error with form values
+    | { error: string; passwordChangeUserId?: number; } // Password change error
+    | { error: string; } // General error (delete, forbidden, invalid intent)
+    | undefined;
 
 // --- Loader --- 
 // Fetches the list of users directly from the DB
@@ -96,7 +98,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
         }
         const userIdToDelete = parseInt(userIdValue, 10);
          if (isNaN(userIdToDelete)) {
-            return json({ message: "Invalid User ID format" }, { status: 400 });
+            return json({ error: "Invalid User ID format" } satisfies ActionData, { status: 400 });
         }
 
         // Prevent admin from deleting themselves
@@ -201,7 +203,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
 
         } catch (error: any) {
              console.error("Error creating user directly:", error);
-             // Prisma unique constraint violation (just in case checks missed something)
+            // Prisma unique constraint violation (just in case checks missed something)
             if (error.code === 'P2002') {
                  const target = error.meta?.target as string[] | undefined;
                  if (target?.includes('email')) {
@@ -216,6 +218,44 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
         }
     }
 
+    // --- Change Password --- 
+    if (intent === "changePassword") {
+        const userIdValue = formData.get("userId");
+        const newPassword = formData.get("newPassword");
+
+        if (!userIdValue || typeof userIdValue !== 'string' || !newPassword || typeof newPassword !== 'string') {
+            return json({ error: "Missing User ID or New Password" } satisfies ActionData, { status: 400 });
+        }
+        const userIdToUpdate = parseInt(userIdValue, 10);
+        if (isNaN(userIdToUpdate)) {
+             return json({ error: "Invalid User ID format", passwordChangeUserId: Number(userIdValue) || undefined } satisfies ActionData, { status: 400 });
+        }
+        if (newPassword.length < 8) {
+            return json({ error: "Password must be at least 8 characters", passwordChangeUserId: userIdToUpdate } satisfies ActionData, { status: 400 });
+        }
+        // Prevent admin from changing their own password here
+        if (loggedInUser.id === userIdToUpdate) {
+             return json({ error: "Cannot change your own password here", passwordChangeUserId: userIdToUpdate } satisfies ActionData, { status: 400 });
+        }
+
+        try {
+            // Hash the new password
+            const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+            // Update the user's password
+            await db.user.update({
+                where: { id: userIdToUpdate },
+                data: { hashedPassword: hashedNewPassword },
+            });
+
+            return json({ success: true, updatedUserId: userIdToUpdate, message: "Password updated successfully" } satisfies ActionData);
+
+        } catch (error: any) {
+             console.error("Error changing password:", error);
+            return json({ error: "Failed to update password", passwordChangeUserId: userIdToUpdate } satisfies ActionData, { status: 500 });
+        }
+    }
+
     // Invalid intent
     return json({ error: "Invalid intent" } satisfies ActionData, { status: 400 });
 }
@@ -223,54 +263,68 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
 // --- Component --- 
 export default function ManageUsersPage() {
     const { users: initialUsers, currentUserEmail } = useLoaderData<typeof loader>();
-    // Use the specific ActionData type
     const actionData = useActionData<ActionData>(); 
     const navigation = useNavigation();
     const [users, setUsers] = useState<DisplayUser[]>(initialUsers);
     const [showAddForm, setShowAddForm] = useState(false);
+    const [editingPasswordUserId, setEditingPasswordUserId] = useState<number | null>(null);
 
     const isSubmitting = navigation.state === "submitting";
+    const submittingIntent = navigation.formData?.get("intent");
+    const submittingUserId = Number(navigation.formData?.get("userId"));
 
-    // Handle action results (update UI optimistically or based on response)
-    // Types inside this useEffect should now be correct based on ActionData
+    // Handle action results with more specific type narrowing
     useEffect(() => {
-        if (actionData?.success) {
-            if (actionData.deletedUserId) { // Type: number | undefined
-                // Remove deleted user from state
-                setUsers(prev => prev.filter(u => u.id !== actionData.deletedUserId));
-                console.log(`User ${actionData.deletedUserId} deleted.`);
-            } else if (actionData.newUser) { // Type: DisplayUser | undefined
-                // Add new user to state
-                setUsers(prev => [...prev, actionData.newUser!]); // Can use non-null assertion if success=true implies newUser exists
-                console.log(`User ${actionData.newUser.email} created.`);
-                setShowAddForm(false); // Hide form after successful creation
+        let messageToShow: string | null = null;
+
+        if (actionData) { // Check if actionData exists
+            if ('success' in actionData && actionData.success) {
+                // Handle success cases
+                if ('deletedUserId' in actionData && actionData.deletedUserId) {
+                    setUsers(prev => prev.filter(u => u.id !== actionData.deletedUserId));
+                    messageToShow = `User deleted successfully.`;
+                } else if ('newUser' in actionData && actionData.newUser) {
+                    setUsers(prev => [...prev, actionData.newUser]); 
+                    messageToShow = `User ${actionData.newUser.email} created.`;
+                    setShowAddForm(false); 
+                } else if ('updatedUserId' in actionData && actionData.updatedUserId) {
+                    messageToShow = actionData.message || "Password updated successfully.";
+                    setEditingPasswordUserId(null); // Close edit form on success
+                }
+            } else if ('error' in actionData && actionData.error) {
+                // Handle error cases
+                 if ('formValues' in actionData && actionData.formValues) { 
+                    // Create user error (handled inline)
+                    console.error("Create user error:", actionData.error);
+                 } else if ('passwordChangeUserId' in actionData && actionData.passwordChangeUserId) {
+                     // Password change error
+                     alert(`Password Change Error: ${actionData.error}`);
+                     // Keep the form open for the specific user
+                     setEditingPasswordUserId(actionData.passwordChangeUserId);
+                 } else {
+                     // General error
+                     alert(`Error: ${actionData.error}`); 
+                 }
             }
         }
-        // Display error messages from actionData if needed
-        if(actionData?.error) {
-             // Check if the error is for the create form before alerting
-            if (actionData.formValues) {
-                 // Error likely displayed inline in the form, maybe log it
-                 console.error("Create user error:", actionData.error);
-            } else {
-                // General error (e.g., delete error)
-                alert(`Error: ${actionData.error}`); // Simple alert for non-create errors
-            }
+
+        if (messageToShow) {
+            alert(messageToShow); 
         }
     }, [actionData]);
 
-    // Reset form state if add form is closed
+    // Reset forms if closed
     useEffect(() => {
-        if (!showAddForm) {
-             // You might want to reset form fields here if needed, 
-             // especially if you were displaying errors inline
-        }
+        if (!showAddForm) { /* Reset create form if needed */ }
     }, [showAddForm]);
+     useEffect(() => {
+        if (editingPasswordUserId === null) { /* Reset password form if needed */ }
+    }, [editingPasswordUserId]);
 
-    // Determine default values for the form, handling potential undefined actionData
-    const defaultFormName = actionData?.error && actionData.formValues ? actionData.formValues.name : '';
-    const defaultFormEmail = actionData?.error && actionData.formValues ? actionData.formValues.email : '';
-    const defaultFormRole = actionData?.error && actionData.formValues ? actionData.formValues.role : Role.EMPLOYEE;
+    // Determine default values for the form, checking formValues existence
+    const defaultFormName = actionData && 'error' in actionData && 'formValues' in actionData && actionData.formValues ? actionData.formValues.name : '';
+    const defaultFormEmail = actionData && 'error' in actionData && 'formValues' in actionData && actionData.formValues ? actionData.formValues.email : '';
+    const defaultFormRole = actionData && 'error' in actionData && 'formValues' in actionData && actionData.formValues ? actionData.formValues.role : Role.EMPLOYEE;
 
     return (
         <div className="p-4 md:p-8">
@@ -279,70 +333,30 @@ export default function ManageUsersPage() {
             {/* Add User Button/Form */} 
             <div className="mb-6">
                 {!showAddForm && (
-                    <button 
-                        onClick={() => setShowAddForm(true)} 
-                        className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-lg"
-                    >
+                    <button onClick={() => setShowAddForm(true)} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-lg">
                         + Add New User
                     </button>
                 )}
-
                 {showAddForm && (
-                    // Use key to reset form state when actionData indicates success
-                    <Form method="post" key={actionData?.success ? 'form-reset' : 'form-active'} className="p-4 border rounded-lg bg-slate-800">
-                        <h2 className="text-xl font-semibold mb-3">Add New User</h2>
-                        {actionData?.error && actionData.formValues && <p className='text-red-400 mb-2'>Error: {actionData.error}</p>}
+                    // Reset key checks specific success case
+                    <Form method="post" key={actionData && 'success' in actionData && 'newUser' in actionData && actionData.newUser ? 'form-reset-create' : 'form-active-create'} className="p-4 border rounded-lg bg-slate-800">
+                         <h2 className="text-xl font-semibold mb-3">Add New User</h2>
+                         {/* Check formValues existence for error display */} 
+                         {actionData && 'error' in actionData && 'formValues' in actionData && actionData.formValues && <p className='text-red-400 mb-2'>Error: {actionData.error}</p>}
                         <input type="hidden" name="intent" value="createUser" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                            <input 
-                                type="text" name="name" 
-                                placeholder="Full Name" 
-                                required 
-                                className="px-3 py-2 rounded bg-slate-700" 
-                                defaultValue={defaultFormName}
-                            />
-                            <input 
-                                type="email" 
-                                name="email" 
-                                placeholder="Email Address" 
-                                required 
-                                className="px-3 py-2 rounded bg-slate-700" 
-                                defaultValue={defaultFormEmail}
-                            />
-                            <input 
-                                type="password" 
-                                name="password" 
-                                placeholder="Password (min 8 chars)" 
-                                required 
-                                minLength={8} 
-                                className="px-3 py-2 rounded bg-slate-700" 
-                            />
-                             <select 
-                                name="role" 
-                                required 
-                                className="px-3 py-2 rounded bg-slate-700" 
-                                defaultValue={defaultFormRole}
-                             >
-                                {Object.values(Role).map(role => (
-                                    <option key={role} value={role}>{role}</option>
-                                ))}
+                            <input type="text" name="name" placeholder="Full Name" required className="px-3 py-2 rounded bg-slate-700" defaultValue={defaultFormName}/>
+                            <input type="email" name="email" placeholder="Email Address" required className="px-3 py-2 rounded bg-slate-700" defaultValue={defaultFormEmail}/>
+                            <input type="password" name="password" placeholder="Password (min 8 chars)" required minLength={8} className="px-3 py-2 rounded bg-slate-700" />
+                             <select name="role" required className="px-3 py-2 rounded bg-slate-700" defaultValue={defaultFormRole}>
+                                {Object.values(Role).map(role => (<option key={role} value={role}>{role}</option>))}
                             </select>
                         </div>
                         <div className="flex gap-3">
-                            <button 
-                                type="submit" 
-                                disabled={isSubmitting}
-                                className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-50"
-                            >
-                                {isSubmitting && navigation.formData?.get('intent') === 'createUser' ? 'Creating...' : 'Create User'}
+                            <button type="submit" disabled={isSubmitting && submittingIntent === 'createUser'} className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-50">
+                                {isSubmitting && submittingIntent === 'createUser' ? 'Creating...' : 'Create User'}
                             </button>
-                            <button 
-                                type="button" 
-                                onClick={() => setShowAddForm(false)}
-                                className="px-4 py-2 rounded bg-slate-600 hover:bg-slate-500"
-                            >
-                                Cancel
-                            </button>
+                            <button type="button" onClick={() => setShowAddForm(false)} className="px-4 py-2 rounded bg-slate-600 hover:bg-slate-500"> Cancel </button>
                         </div>
                     </Form>
                 )}
@@ -350,34 +364,57 @@ export default function ManageUsersPage() {
 
             {/* User List Table */} 
             <div className="overflow-x-auto">
-                <table className="min-w-full bg-slate-800 rounded-lg">
+                <table className="min-w-full bg-slate-800 rounded-lg text-sm sm:text-base">
                     <thead>
                         <tr className="border-b border-slate-700">
-                            <th className="text-left p-3">Name</th>
-                            <th className="text-left p-3">Email</th>
-                            <th className="text-left p-3">Role</th>
-                            <th className="text-left p-3">Actions</th>
+                            <th className="text-left p-2 sm:p-3">Name</th>
+                            <th className="text-left p-2 sm:p-3">Email</th>
+                            <th className="text-left p-2 sm:p-3">Role</th>
+                            <th className="text-left p-2 sm:p-3">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {users.map(user => (
-                            <tr key={user.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                                <td className="p-3">{user.name ?? <span className="text-slate-500">N/A</span>}</td>
-                                <td className="p-3">{user.email}</td>
-                                <td className="p-3">{user.role}</td>
-                                <td className="p-3">
-                                    {/* Prevent deleting the current logged-in admin */} 
-                                    {user.email !== currentUserEmail && (
-                                        <Form method="post" onSubmit={(e: React.FormEvent) => !confirm('Are you sure you want to delete this user?') && e.preventDefault()} >
-                                            <input type="hidden" name="intent" value="deleteUser" />
+                          <tr key={user.id} className={`border-b border-slate-700/50 ${editingPasswordUserId === user.id ? 'bg-slate-700/50' : 'hover:bg-slate-700/30'}`}>
+                                <td className="p-2 sm:p-3 align-top">{user.name ?? <span className="text-slate-500">N/A</span>}</td>
+                                <td className="p-2 sm:p-3 align-top">{user.email}</td>
+                                <td className="p-2 sm:p-3 align-top">{user.role}</td>
+                                <td className="p-2 sm:p-3 align-top">
+                                    <div className="flex flex-col sm:flex-row gap-2 items-start">
+                                        {/* Action Buttons: Delete, Change Password */} 
+                                        {user.email !== currentUserEmail && (
+                                            <>
+                                                <Form method="post" onSubmit={(e: React.FormEvent) => !confirm('Are you sure?') && e.preventDefault()} className="flex"> 
+                                                    <input type="hidden" name="intent" value="deleteUser" />
+                                                    <input type="hidden" name="userId" value={user.id} />
+                                                    <button type="submit" disabled={isSubmitting && submittingIntent === 'deleteUser' && submittingUserId === user.id} className="px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-xs sm:text-sm disabled:opacity-50 whitespace-nowrap" >
+                                                        {isSubmitting && submittingIntent === 'deleteUser' && submittingUserId === user.id ? 'Deleting...' : 'Delete'}
+                                                    </button>
+                                                </Form>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setEditingPasswordUserId(editingPasswordUserId === user.id ? null : user.id)}
+                                                    disabled={isSubmitting}
+                                                    className="px-3 py-1 rounded bg-yellow-600 hover:bg-yellow-700 text-xs sm:text-sm disabled:opacity-50 whitespace-nowrap"
+                                                >
+                                                    {editingPasswordUserId === user.id ? 'Cancel' : 'Change Password'}
+                                                 </button>
+                                            </>
+                                        )}
+                                    </div>
+                                    {/* Inline Password Change Form */} 
+                                    {editingPasswordUserId === user.id && (
+                                        <Form method="post" className="mt-2"> 
+                                             {/* Check passwordChangeUserId existence for error display */} 
+                                             {actionData && 'error' in actionData && 'passwordChangeUserId' in actionData && actionData.passwordChangeUserId === user.id && <p className='text-red-400 mb-1 text-xs'>Error: {actionData.error}</p>}
+                                            <input type="hidden" name="intent" value="changePassword" />
                                             <input type="hidden" name="userId" value={user.id} />
-                                            <button 
-                                                type="submit" 
-                                                disabled={isSubmitting}
-                                                className="px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-sm disabled:opacity-50"
-                                            >
-                                                {isSubmitting && navigation.formData?.get('intent') === 'deleteUser' && navigation.formData?.get('userId') === String(user.id) ? 'Deleting...' : 'Delete'}
-                                            </button>
+                                            <div className="flex flex-col sm:flex-row gap-2 items-stretch">
+                                                <input type="password" name="newPassword" placeholder="New Password (min 8)" required minLength={8} className="px-2 py-1 rounded bg-slate-600 text-xs sm:text-sm flex-grow" />
+                                                <button type="submit" disabled={isSubmitting && submittingIntent === 'changePassword' && submittingUserId === user.id} className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm disabled:opacity-50 whitespace-nowrap" >
+                                                    {isSubmitting && submittingIntent === 'changePassword' && submittingUserId === user.id ? 'Saving...' : 'Save Pwd'}
+                                                </button>
+                                            </div>
                                         </Form>
                                     )}
                                 </td>
