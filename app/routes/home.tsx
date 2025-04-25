@@ -63,14 +63,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     },
   });
-  // Return the raw data - React Router will handle serialization
-  return employees;
+  // Use json() helper to return data correctly
+  return json(employees);
 }
 
 export default function EmployeePerformanceDashboard() {
-  const employees = useLoaderData<typeof loader>();
+  // Explicitly type the expected data from the loader
+  const employees = useLoaderData<Employee[]>();
   // Get user and flags from Outlet context
   const { user, isAdmin, isManager } = useOutletContext<OutletContextType>();
+
+  // --- DEBUGGING --- 
+  console.log("Loaded Employees:", JSON.stringify(employees, null, 2));
+  // --- END DEBUGGING ---
+
   const navigation = useNavigation();
   const submit = useSubmit();
   const [view, setView] = useState<ViewMode>("day");
@@ -130,20 +136,48 @@ export default function EmployeePerformanceDashboard() {
   const trendData = (() => {
     // Average trend across employees for the chart
     const pointsMap: Record<string, { total: number; count: number }> = {};
+    // Check if employees data is valid array before iterating
+    if (!Array.isArray(employees)) {
+        console.error("Employees data is not an array:", employees);
+        return []; // Return empty array if data is invalid
+    }
     employees.forEach((e) => {
-      e.trendPoints.forEach((pt) => {
-        const ts = new Date(pt.timestamp).getTime();
-        pointsMap[ts] = pointsMap[ts] || { total: 0, count: 0 };
-        pointsMap[ts].total += pt.score;
-        pointsMap[ts].count += 1;
-      });
+      // Ensure trendPoints is an array
+      if (Array.isArray(e.trendPoints)) {
+          e.trendPoints.forEach((pt) => {
+            // Ensure timestamp and score are valid
+            if (pt.timestamp && typeof pt.score === 'number') {
+                try {
+                    const ts = new Date(pt.timestamp).getTime();
+                    if (!isNaN(ts)) { // Check if timestamp parsing was successful
+                      pointsMap[ts] = pointsMap[ts] || { total: 0, count: 0 };
+                      pointsMap[ts].total += pt.score;
+                      pointsMap[ts].count += 1;
+                    } else {
+                        console.warn("Invalid timestamp format:", pt.timestamp);
+                    }
+                } catch (error) {
+                    console.error("Error parsing timestamp:", pt.timestamp, error);
+                }
+            } else {
+                console.warn("Invalid trend point data:", pt);
+            }
+          });
+      } else {
+          console.warn("Employee missing trendPoints array:", e);
+      }
     });
-    return Object.entries(pointsMap)
+    const calculatedTrendData = Object.entries(pointsMap)
       .map(([ts, { total, count }]) => ({
         ts: Number(ts),
-        score: total / count,
+        score: count > 0 ? total / count : 0, // Avoid division by zero
       }))
       .sort((a, b) => a.ts - b.ts);
+      
+    // --- DEBUGGING --- 
+    console.log("Calculated Trend Data:", JSON.stringify(calculatedTrendData, null, 2));
+    // --- END DEBUGGING ---
+    return calculatedTrendData;
   })();
 
   const scoreColor = (score: number) =>
@@ -216,7 +250,8 @@ export default function EmployeePerformanceDashboard() {
 
       {/* Employee Grid */}
       <section className={`grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-2 gap-4 mb-12 ${navigation.state === "loading" ? "opacity-50" : ""}`}>
-        {employees.map((emp) => {
+        {/* Check if employees is an array before mapping */}
+        {Array.isArray(employees) && employees.map((emp) => {
           // Safely access score, default to 0 if scores object is null
           const score = emp.scores?.[view] ?? 0;
           const wrongNumbers = emp.wrongNumbers;

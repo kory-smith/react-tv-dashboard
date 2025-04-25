@@ -10,7 +10,8 @@ export default defineConfig({
       "mock-aws-s3",
       "aws-sdk",
       "nock",
-      "@mapbox/node-pre-gyp"
+      "@mapbox/node-pre-gyp",
+      "@remix-run/node"
     ]
   }
 });
