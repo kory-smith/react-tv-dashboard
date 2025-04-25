@@ -1,6 +1,6 @@
 import { db } from "~/lib/db";
 import { type ActionFunctionArgs, json } from "@remix-run/node";
-import { requireUser, isManager } from "~/lib/auth.server";
+import { requireUser, isManager, isAdmin } from "~/lib/auth.server";
 
 // Handles updating an employee's score or wrong numbers
 // POST /api/employees/:id (Changed method to POST as it modifies data)
@@ -11,7 +11,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   // Validate the ID parameter
   const id = Number(params.id);
   if (isNaN(id)) {
-    return new Response("Invalid employee ID", { status: 400 });
+    return json({ error: "Invalid employee ID" }, { status: 400 });
   }
 
   try {
@@ -21,11 +21,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     // Validate the data
     const validFields = ['day', 'week', 'month', 'wrongNumbers'];
     if (!data.field || !validFields.includes(data.field)) {
-      return new Response(`Invalid field type. Must be one of: ${validFields.join(', ')}`, { status: 400 });
+      return json({ error: `Invalid field type. Must be one of: ${validFields.join(', ')}` }, { status: 400 });
     }
     
     if (data.change !== 1 && data.change !== -1) {
-      return new Response("Change must be 1 or -1", { status: 400 });
+      return json({ error: "Change must be 1 or -1" }, { status: 400 });
     }
     
     // Get the employee to ensure they exist
@@ -35,15 +35,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
     
     if (!employee || !employee.scores) {
-      return new Response("Employee not found", { status: 404 });
+      return json({ error: "Employee not found" }, { status: 404 });
     }
     
     let updatedData;
 
     if (data.field === 'wrongNumbers') {
-      // Authorization: Only managers or admins can update wrongNumbers
+      // Authorization: Managers or Admins required
       if (!isManager(user)) {
-          return json({ error: "Forbidden" }, { status: 403 });
+          return json({ error: "Forbidden: Only managers or admins can update wrong numbers." }, { status: 403 });
+      }
+
+      // NEW: Managers can only increment, Admins can do both
+      if (data.change === -1 && !isAdmin(user)) {
+         return json({ error: "Forbidden: Managers can only increment wrong numbers." }, { status: 403 });
       }
 
       // Update the wrongNumbers count for the employee
@@ -56,14 +61,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
         include: { scores: true }, // Include scores to match return type
       });
     } else {
-      // Authorization: Only the employee themselves can update their score
-      if (user.employeeId !== id) {
-          return json({ error: "Forbidden: You can only update your own score." }, { status: 403 });
+      // NEW Authorization: Employee themselves OR a Manager/Admin can update score
+      if (user.employeeId !== id && !isManager(user)) {
+          return json({ error: "Forbidden: You can only update your own score or must be a manager/admin." }, { status: 403 });
       }
 
       // Update the score for the specified view (day, week, month)
       if (!employee.scores) { // Extra check just in case scores are null
-          return new Response("Employee scores not found", { status: 404 });
+          return json({ error: "Employee scores not found" }, { status: 404 });
       }
       const currentScore = employee.scores[data.field as 'day' | 'week' | 'month'];
       const newScore = Math.max(0, Math.min(100, currentScore + data.change));
@@ -91,11 +96,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
-    return new Response(JSON.stringify(updatedData), {
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Error updating employee score:", error);
-    return new Response("Error updating employee score", { status: 500 });
+    return json(updatedData);
+  } catch (error: any) {
+    console.error("Error updating employee data:", error);
+    // Check for specific error types if needed
+    // if (error instanceof Prisma.PrismaClientKnownRequestError) { ... }
+    return json({ error: "Error updating employee data" }, { status: 500 });
   }
 } 

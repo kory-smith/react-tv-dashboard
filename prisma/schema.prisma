@@ -25,7 +25,7 @@ model User {
   hashedPassword String
   role           Role      @default(EMPLOYEE)
   employeeId     Int?      @unique // Optional: A user might be an admin/manager without being an employee
-  employee       Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull) // If employee is deleted, set user.employeeId to null
+  employee       Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade) // If user is deleted, also delete the linked employee (which cascades)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }

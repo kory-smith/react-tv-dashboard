@@ -83,11 +83,11 @@ export default function EmployeePerformanceDashboard() {
   const navigation = useNavigation();
   const submit = useSubmit();
   // Get search params to check for showAdd
-  const [searchParams] = useSearchParams();
+  // const [searchParams] = useSearchParams();
   const [view, setView] = useState<ViewMode>("day");
-  const [newEmployeeName, setNewEmployeeName] = useState("");
+  // const [newEmployeeName, setNewEmployeeName] = useState("");
   // Default showAddForm based on query parameter
-  const [showAddForm, setShowAddForm] = useState(searchParams.get("showAdd") === "true");
+  // const [showAddForm, setShowAddForm] = useState(searchParams.get("showAdd") === "true");
 
   // When changing a field, submit to the API
   const updateField = async (employeeId: number, field: 'day' | 'week' | 'month' | 'wrongNumbers', change: 1 | -1) => {
@@ -100,43 +100,6 @@ export default function EmployeePerformanceDashboard() {
         navigate: false,
       }
     );
-  };
-
-  // Add new employee
-  const addEmployee = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newEmployeeName.trim() === "") return;
-    
-    submit(
-      { name: newEmployeeName },
-      {
-        method: "post",
-        action: "/api/employees/create",
-        encType: "application/json",
-        navigate: false,
-      }
-    );
-    
-    setNewEmployeeName("");
-    setShowAddForm(false);
-  };
-
-  // Delete employee (Check if user is Admin via context flag)
-  const deleteEmployee = (id: number) => {
-    if (!isAdmin) { // Use flag from context
-        alert("Only Admins can delete employees.");
-        return;
-    }
-    if (confirm("Are you sure you want to remove this employee?")) {
-      submit(
-        {},
-        {
-          method: "delete",
-          action: `/api/employees/delete/${id}`,
-          navigate: false,
-        }
-      );
-    }
   };
 
   const trendData = (() => {
@@ -194,7 +157,7 @@ export default function EmployeePerformanceDashboard() {
   return (
     <>
       {/* Add employee form (Show only for Admins via context flag) */}
-      {isAdmin && showAddForm && (
+      {/* {isAdmin && showAddForm && (
         <form onSubmit={addEmployee} className="mb-6 flex gap-4">
           <input
             type="text"
@@ -213,7 +176,7 @@ export default function EmployeePerformanceDashboard() {
             Add
           </button>
         </form>
-      )}
+      )} */}
 
       {/* View Toggle */}
       <div className="flex gap-4 mb-6">
@@ -241,10 +204,10 @@ export default function EmployeePerformanceDashboard() {
           return (
             <div
               key={emp.id}
-              className={`rounded-3xl p-6 flex flex-col items-center justify-center ${currentBgColor}`}
+              className={`rounded-3xl p-6 flex flex-col items-center justify-center ${currentBgColor} relative`}
             >
               {/* Remove employee button (Show only for Admins via context flag) */}
-              {isAdmin && (
+              {/* {isAdmin && (
                   <button
                     onClick={() => deleteEmployee(emp.id)}
                     className="absolute top-2 right-2 text-slate-300 hover:text-white opacity-60 hover:opacity-100 p-1 rounded-full bg-black/20 hover:bg-black/40"
@@ -252,7 +215,7 @@ export default function EmployeePerformanceDashboard() {
                   >
                     ✕
                   </button>
-              )}
+              )} */}
               
               <span className="text-xl lg:text-2xl font-semibold mb-1 select-none">
                 {emp.name}
@@ -266,9 +229,10 @@ export default function EmployeePerformanceDashboard() {
                 {view.toUpperCase()}
               </span>
               
-              {/* Score Controls (Show only if it's the user's own employee record) */}
-              {user?.employeeId === emp.id && (
+              {/* Score Controls: Show if it's the user's own record OR if user is Manager/Admin */}
+              {(user?.employeeId === emp.id || isManager) && (
                   <div className="flex gap-2 mt-3">
+                    {/* Decrease Score Button */}
                     <button 
                       onClick={() => updateField(emp.id, view, -1)}
                       disabled={navigation.state === "submitting" || score <= 0}
@@ -277,6 +241,7 @@ export default function EmployeePerformanceDashboard() {
                     >
                       <span className="text-2xl font-bold">-</span>
                     </button>
+                    {/* Increase Score Button */}
                     <button 
                       onClick={() => updateField(emp.id, view, 1)}
                       disabled={navigation.state === "submitting" || score >= 100}
@@ -288,12 +253,12 @@ export default function EmployeePerformanceDashboard() {
                   </div>
               )}
 
-              {/* Wrong Numbers Display and Controls (Show controls only for Managers/Admins via context flag) */}
+              {/* Wrong Numbers Display and Controls */}
               <div className="mt-4 text-center">
                 <span className="text-sm opacity-70 select-none">WRONG #'s</span>
                 <div className="flex items-center justify-center gap-2 mt-1">
-                  {/* Button only visible if manager via context flag */} 
-                  {isManager && (
+                  {/* Decrease Wrong # Button: Show only for Admins */}
+                  {isAdmin && (
                     <button
                       onClick={() => updateField(emp.id, 'wrongNumbers', -1)}
                       disabled={navigation.state === "submitting" || wrongNumbers <= 0}
@@ -303,10 +268,11 @@ export default function EmployeePerformanceDashboard() {
                       <span className="text-xl font-bold">-</span>
                     </button>
                   )}
+                  {/* Display Wrong # Count */}
                   <span className="text-xl font-semibold select-none min-w-[2ch]">
                     {wrongNumbers}
                   </span>
-                  {/* Button only visible if manager via context flag */} 
+                  {/* Increase Wrong # Button: Show for Managers/Admins */}
                   {isManager && (
                     <button
                       onClick={() => updateField(emp.id, 'wrongNumbers', 1)}

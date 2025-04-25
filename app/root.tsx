@@ -74,12 +74,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {/* Right-side actions & User Info */}
           <div className="flex items-center gap-2 sm:gap-4">
             {/* Conditionally render Add Employee button via Link (to avoid Form nesting) */}
-            {isAdmin && (
+            {/* {isAdmin && (
               <Link
                 to="/?showAdd=true" // Use query param to trigger form in home.tsx (needs update)
                 className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-base sm:text-lg whitespace-nowrap"
               >
                 Add Employee
+              </Link>
+            )} */}
+
+            {/* Add Manage Users Link for Admins */}
+            {isAdmin && (
+              <Link
+                to="/admin/manage-users" 
+                className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-base sm:text-lg whitespace-nowrap"
+              >
+                Manage Users
               </Link>
             )}
 
