@@ -34,6 +34,7 @@ interface Score {
 interface Employee {
   id: number;
   name: string;
+  wrongNumbers: number;
   scores: Score;
   trendPoints: TrendPoint[];
 }
@@ -64,10 +65,10 @@ export default function EmployeePerformanceDashboard() {
   const [newEmployeeName, setNewEmployeeName] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // When changing score, submit to the API
-  const updateScore = async (employeeId: number, change: 1 | -1) => {
+  // When changing a field, submit to the API
+  const updateField = async (employeeId: number, field: 'day' | 'week' | 'month' | 'wrongNumbers', change: 1 | -1) => {
     submit(
-      { view, change },
+      { field, change },
       {
         method: "post",
         action: `/api/employees/${employeeId}`,
@@ -199,6 +200,7 @@ export default function EmployeePerformanceDashboard() {
       <section className={`grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-2 gap-4 mb-12 ${navigation.state === "loading" ? "opacity-50" : ""}`}>
         {employees.map((emp) => {
           const score = emp.scores[view];
+          const wrongNumbers = emp.wrongNumbers;
           return (
             <div
               key={emp.id}
@@ -228,21 +230,47 @@ export default function EmployeePerformanceDashboard() {
               {/* Score Controls */}
               <div className="flex gap-2 mt-3">
                 <button 
-                  onClick={() => updateScore(emp.id, -1)}
+                  onClick={() => updateField(emp.id, view, -1)}
                   disabled={navigation.state === "submitting" || score <= 0}
                   className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-10 h-10 rounded-full flex items-center justify-center"
-                  aria-label={`Decrease ${emp.name}'s score`}
+                  aria-label={`Decrease ${emp.name}'s ${view} score`}
                 >
                   <span className="text-2xl font-bold">-</span>
                 </button>
                 <button 
-                  onClick={() => updateScore(emp.id, 1)}
+                  onClick={() => updateField(emp.id, view, 1)}
                   disabled={navigation.state === "submitting" || score >= 100}
                   className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-10 h-10 rounded-full flex items-center justify-center"
-                  aria-label={`Increase ${emp.name}'s score`}
+                  aria-label={`Increase ${emp.name}'s ${view} score`}
                 >
                   <span className="text-2xl font-bold">+</span>
                 </button>
+              </div>
+
+              {/* Wrong Numbers Display and Controls */}
+              <div className="mt-4 text-center">
+                <span className="text-sm opacity-70 select-none">WRONG #'s</span>
+                <div className="flex items-center justify-center gap-2 mt-1">
+                  <button
+                    onClick={() => updateField(emp.id, 'wrongNumbers', -1)}
+                    disabled={navigation.state === "submitting" || wrongNumbers <= 0}
+                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-8 h-8 rounded-full flex items-center justify-center text-sm"
+                    aria-label={`Decrease ${emp.name}'s wrong numbers`}
+                  >
+                    <span className="text-xl font-bold">-</span>
+                  </button>
+                  <span className="text-xl font-semibold select-none min-w-[2ch]">
+                    {wrongNumbers}
+                  </span>
+                  <button
+                    onClick={() => updateField(emp.id, 'wrongNumbers', 1)}
+                    disabled={navigation.state === "submitting"}
+                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-8 h-8 rounded-full flex items-center justify-center text-sm"
+                    aria-label={`Increase ${emp.name}'s wrong numbers`}
+                  >
+                    <span className="text-xl font-bold">+</span>
+                  </button>
+                </div>
               </div>
             </div>
           );

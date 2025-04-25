@@ -1,0 +1,29 @@
+-- CreateTable
+CREATE TABLE "Employee" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "name" TEXT NOT NULL,
+    "wrongNumbers" INTEGER NOT NULL DEFAULT 0
+);
+
+-- CreateTable
+CREATE TABLE "Score" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "employeeId" INTEGER NOT NULL,
+    "day" INTEGER NOT NULL DEFAULT 75,
+    "week" INTEGER NOT NULL DEFAULT 75,
+    "month" INTEGER NOT NULL DEFAULT 75,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Score_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "TrendPoint" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "employeeId" INTEGER NOT NULL,
+    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "score" INTEGER NOT NULL,
+    CONSTRAINT "TrendPoint_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Score_employeeId_key" ON "Score"("employeeId");

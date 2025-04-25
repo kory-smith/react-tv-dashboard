@@ -16,6 +16,7 @@ datasource db {
 model Employee {
   id         Int          @id @default(autoincrement())
   name       String
+  wrongNumbers Int        @default(0)
   scores     Score?
   trendPoints TrendPoint[]
 }

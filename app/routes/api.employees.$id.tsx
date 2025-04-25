@@ -14,8 +14,9 @@ export async function action({ request, params }: { request: Request, params: { 
     const data = await request.json();
     
     // Validate the data
-    if (!data.view || !(['day', 'week', 'month'].includes(data.view))) {
-      return new Response("Invalid view type", { status: 400 });
+    const validFields = ['day', 'week', 'month', 'wrongNumbers'];
+    if (!data.field || !validFields.includes(data.field)) {
+      return new Response(`Invalid field type. Must be one of: ${validFields.join(', ')}`, { status: 400 });
     }
     
     if (data.change !== 1 && data.change !== -1) {
@@ -32,28 +33,50 @@ export async function action({ request, params }: { request: Request, params: { 
       return new Response("Employee not found", { status: 404 });
     }
     
-    // Update the score for the specified view
-    const currentScore = employee.scores[data.view as 'day' | 'week' | 'month'];
-    const newScore = Math.max(0, Math.min(100, currentScore + data.change));
-    
-    // Update the score in the database
-    const updatedScore = await db.score.update({
-      where: { employeeId: id },
-      data: { [data.view]: newScore },
-    });
-    
-    // If updating the day score, also add a trend point
-    if (data.view === 'day') {
-      await db.trendPoint.create({
-        data: {
-          employeeId: id,
-          score: newScore,
-          timestamp: new Date(),
-        },
+    let updatedData;
+
+    if (data.field === 'wrongNumbers') {
+      // Update the wrongNumbers count for the employee
+      const currentWrongNumbers = employee.wrongNumbers;
+      const newWrongNumbers = Math.max(0, currentWrongNumbers + data.change); // Ensure count doesn't go below 0
+
+      updatedData = await db.employee.update({
+        where: { id },
+        data: { wrongNumbers: newWrongNumbers },
+        include: { scores: true }, // Include scores to match return type
+      });
+    } else {
+      // Update the score for the specified view (day, week, month)
+      if (!employee.scores) { // Extra check just in case scores are null
+          return new Response("Employee scores not found", { status: 404 });
+      }
+      const currentScore = employee.scores[data.field as 'day' | 'week' | 'month'];
+      const newScore = Math.max(0, Math.min(100, currentScore + data.change));
+
+      // Update the score in the database
+      const updatedScore = await db.score.update({
+        where: { employeeId: id },
+        data: { [data.field]: newScore },
+      });
+
+      // If updating the day score, also add a trend point
+      if (data.field === 'day') {
+        await db.trendPoint.create({
+          data: {
+            employeeId: id,
+            score: newScore,
+            timestamp: new Date(),
+          },
+        });
+      }
+      // Fetch the updated employee data to return consistently
+      updatedData = await db.employee.findUnique({
+          where: { id },
+          include: { scores: true },
       });
     }
-    
-    return new Response(JSON.stringify(updatedScore), {
+
+    return new Response(JSON.stringify(updatedData), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {

@@ -24,6 +24,7 @@ export async function action({ request }: { request: Request }) {
     const employee = await db.employee.create({
       data: {
         name: data.name,
+        wrongNumbers: 0,
         scores: {
           create: {
             day: 75,
