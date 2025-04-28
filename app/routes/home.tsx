@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -8,11 +8,12 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
-import { useLoaderData, useNavigation, useSubmit, useOutletContext, useSearchParams } from "react-router";
+import { useLoaderData, useNavigation, useSubmit, useOutletContext } from "react-router";
 import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { db } from "~/lib/db"; // Import db client
 import { type User } from "@prisma/client"; // Import User type
 import { Role } from "@prisma/client"; // Import Role enum
+import { useSSE } from "~/hooks/useSSE"; // Import the SSE hook
 
 // -------------------- Types --------------------
 
@@ -38,7 +39,7 @@ interface Employee {
   id: number;
   name: string;
   wrongNumbers: number;
-  scores: Score;
+  scores: Score | null | undefined;
   trendPoints: TrendPoint[];
 }
 
@@ -76,49 +77,87 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function EmployeePerformanceDashboard() {
   // Explicitly type the expected data from the loader
-  const employees = useLoaderData<Employee[]>();
+  const initialEmployees = useLoaderData<Employee[]>();
+  // Use state to manage employees data so it can be updated by SSE
+  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   // Get user and flags from Outlet context
   const { user, isAdmin, isManager } = useOutletContext<OutletContextType>();
 
   const navigation = useNavigation();
   const submit = useSubmit();
-  // Get search params to check for showAdd
-  // const [searchParams] = useSearchParams();
   const [view, setView] = useState<ViewMode>("day");
-  // const [newEmployeeName, setNewEmployeeName] = useState("");
-  // Default showAddForm based on query parameter
-  // const [showAddForm, setShowAddForm] = useState(searchParams.get("showAdd") === "true");
+
+  // -- SSE Hook Integration --
+  const { lastEvent, isConnected, error: sseError } = useSSE('/api/events');
+
+  // Effect to update local state when an SSE event is received
+  useEffect(() => {
+    if (lastEvent) {
+      console.log("Processing SSE event:", lastEvent);
+      setEmployees(currentEmployees => 
+        currentEmployees.map(emp => {
+          if (emp.id === lastEvent.employeeId) {
+            console.log(`Updating employee ${emp.id} field ${lastEvent.field} to ${lastEvent.newValue}`);
+            // Create a new employee object with the updated field
+            const updatedEmp = { ...emp };
+            if (lastEvent.field === 'wrongNumbers') {
+              updatedEmp.wrongNumbers = lastEvent.newValue;
+            } else if (updatedEmp.scores) { // Check if scores object exists
+              updatedEmp.scores = {
+                ...updatedEmp.scores,
+                [lastEvent.field]: lastEvent.newValue,
+              };
+            } else {
+              // Handle case where scores might be initially null (though unlikely with current loader)
+              console.warn(`Scores object not found for employee ${emp.id} during SSE update.`);
+            }
+            return updatedEmp;
+          }
+          return emp;
+        })
+      );
+    }
+  }, [lastEvent]); // Re-run only when a new event arrives
+
+  // Log SSE connection status and errors (optional)
+  useEffect(() => {
+    if (isConnected) {
+      console.log("SSE Connected.");
+    } else {
+      console.log("SSE Disconnected.");
+    }
+    if (sseError) {
+      console.error("SSE Connection Error:", sseError);
+    }
+  }, [isConnected, sseError]);
+  // -------------------------
 
   // When changing a field, submit to the API
   const updateField = async (employeeId: number, field: 'day' | 'week' | 'month' | 'wrongNumbers', change: 1 | -1) => {
     submit(
-      { field, change },
+      { field, change }, // Send change as a number
       {
         method: "post",
         action: `/api/employees/${employeeId}`,
-        encType: "application/json",
-        navigate: false,
+        encType: "application/json", 
+        navigate: false, 
       }
     );
   };
 
   const trendData = (() => {
-    // Average trend across employees for the chart
     const pointsMap: Record<string, { total: number; count: number }> = {};
-    // Check if employees data is valid array before iterating
     if (!Array.isArray(employees)) {
         console.error("Employees data is not an array:", employees);
-        return []; // Return empty array if data is invalid
+        return []; 
     }
     employees.forEach((e) => {
-      // Ensure trendPoints is an array
       if (Array.isArray(e.trendPoints)) {
           e.trendPoints.forEach((pt) => {
-            // Ensure timestamp and score are valid
             if (pt.timestamp && typeof pt.score === 'number') {
                 try {
                     const ts = new Date(pt.timestamp).getTime();
-                    if (!isNaN(ts)) { // Check if timestamp parsing was successful
+                    if (!isNaN(ts)) { 
                       pointsMap[ts] = pointsMap[ts] || { total: 0, count: 0 };
                       pointsMap[ts].total += pt.score;
                       pointsMap[ts].count += 1;
@@ -133,13 +172,13 @@ export default function EmployeePerformanceDashboard() {
             }
           });
       } else {
-          console.warn("Employee missing trendPoints array:", e);
+          // console.warn("Employee missing trendPoints array:", e);
       }
     });
     const calculatedTrendData = Object.entries(pointsMap)
       .map(([ts, { total, count }]) => ({
         ts: Number(ts),
-        score: count > 0 ? total / count : 0, // Avoid division by zero
+        score: count > 0 ? total / count : 0, 
       }))
       .sort((a, b) => a.ts - b.ts);
       
@@ -190,19 +229,18 @@ export default function EmployeePerformanceDashboard() {
       </div>
 
       {/* Employee Grid */}
-      <section className={`grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-2 gap-4 mb-12 ${navigation.state === "loading" ? "opacity-50" : ""}`}>
+      <section className={`grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-2 gap-4 mb-12 ${navigation.state === "loading" && !lastEvent ? "opacity-50" : ""}`}>
         {/* Check if employees is an array before mapping */}
         {Array.isArray(employees) && employees.map((emp) => {
-          // Safely access score, default to 0 if scores object is null
-          const score = emp.scores?.[view] ?? 0;
+          // Safely access score, default to 0 if scores object is null/undefined
+          const score = emp.scores?.[view] ?? 0; 
           const wrongNumbers = emp.wrongNumbers;
-          // Determine background color based on potentially defaulted score
-          const currentBgColor = emp.scores ? bgColor(score) : "bg-slate-700/50"; // Use default gray if no score data
+          const currentBgColor = emp.scores ? bgColor(score) : "bg-slate-700/50";
 
           return (
             <div
               key={emp.id}
-              className={`rounded-3xl p-6 flex flex-col items-center justify-center ${currentBgColor} relative`}
+              className={`rounded-3xl p-6 flex flex-col items-center justify-center ${currentBgColor} relative transition-colors duration-300 ease-in-out`}
             >
               {/* Remove employee button (Show only for Admins via context flag) */}
               {/* {isAdmin && (
@@ -219,7 +257,7 @@ export default function EmployeePerformanceDashboard() {
                 {emp.name}
               </span>
               <span
-                className={`text-4xl lg:text-5xl font-extrabold ${scoreColor(score)} select-none`}
+                className={`text-4xl lg:text-5xl font-extrabold ${scoreColor(score)} select-none transition-colors duration-300 ease-in-out`}
               >
                 {score}
               </span>
@@ -227,7 +265,7 @@ export default function EmployeePerformanceDashboard() {
               Numbers
               </span>
               
-              {/* Score Controls: Show if it's the user's own record OR if user is Manager/Admin */}
+              {/* Score Controls */}
               {(user?.employeeId === emp.id || isManager) && (
                   <div className="flex gap-2 mt-3">
                     {/* Decrease Score Button */}
@@ -255,7 +293,7 @@ export default function EmployeePerformanceDashboard() {
               <div className="mt-4 text-center">
                 <span className="text-sm opacity-70 select-none">WRONG numbers</span>
                 <div className="flex items-center justify-center gap-2 mt-1">
-                  {/* Decrease Wrong # Button: Show only for Admins */}
+                  {/* Decrease Wrong # Button */}
                   {isAdmin && (
                     <button
                       onClick={() => updateField(emp.id, 'wrongNumbers', -1)}
@@ -270,7 +308,7 @@ export default function EmployeePerformanceDashboard() {
                   <span className="text-xl font-semibold select-none min-w-[2ch]">
                     {wrongNumbers}
                   </span>
-                  {/* Increase Wrong # Button: Show for Managers/Admins */}
+                  {/* Increase Wrong # Button */}
                   {isManager && (
                     <button
                       onClick={() => updateField(emp.id, 'wrongNumbers', 1)}

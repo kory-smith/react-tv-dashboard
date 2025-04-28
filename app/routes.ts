@@ -5,6 +5,7 @@ export default [
   { path: "login", file: "routes/login.tsx" },
   { path: "api/employees", file: "routes/api.employees.tsx" },
   { path: "api/employees/:id", file: "routes/api.employees.$id.tsx" },
+  { path: "api/events", file: "routes/api.events.ts" },
   { path: "api/logout", file: "routes/api.logout.ts" },
   { path: "api/users", file: "routes/api.users.ts" },
   { path: "api/users/delete/:userId", file: "routes/api.users.delete.$userId.ts" },

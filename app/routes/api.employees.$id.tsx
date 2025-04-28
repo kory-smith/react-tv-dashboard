@@ -1,6 +1,7 @@
 import { db } from "~/lib/db";
 import { type ActionFunctionArgs, json } from "@remix-run/node";
 import { requireUser, isManager, isAdmin } from "~/lib/auth.server";
+import { emitter } from "~/lib/emitter.server";
 
 // Handles updating an employee's score or wrong numbers
 // POST /api/employees/:id (Changed method to POST as it modifies data)
@@ -39,6 +40,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
     
     let updatedData;
+    let newValue: number | undefined;
 
     if (data.field === 'wrongNumbers') {
       // Authorization: Managers or Admins required
@@ -60,6 +62,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: { wrongNumbers: newWrongNumbers },
         include: { scores: true }, // Include scores to match return type
       });
+      newValue = newWrongNumbers;
     } else {
       // NEW Authorization: Employee themselves OR a Manager/Admin can update score
       if (user.employeeId !== id && !isManager(user)) {
@@ -74,10 +77,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const newScore = Math.max(0, Math.min(100, currentScore + data.change));
 
       // Update the score in the database
-      const updatedScore = await db.score.update({
+      const updatedScoreRecord = await db.score.update({
         where: { employeeId: id },
         data: { [data.field]: newScore },
       });
+      newValue = newScore;
 
       // If updating the day score, also add a trend point
       if (data.field === 'day') {
@@ -93,6 +97,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
       updatedData = await db.employee.findUnique({
           where: { id },
           include: { scores: true },
+      });
+    }
+
+    // Emit the update event if newValue is defined
+    if (updatedData && newValue !== undefined) {
+      emitter.emit("score_update", {
+        type: 'SCORE_UPDATE', // Consistent event type
+        employeeId: id,
+        field: data.field,
+        newValue: newValue,
+        timestamp: new Date().toISOString(),
       });
     }
 
