@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   LineChart,
   Line,
@@ -152,8 +152,6 @@ export default function EmployeePerformanceDashboard() {
   const bgColor = (score: number) =>
     score >= 75 ? "bg-green-700/50" : score >= 60 ? "bg-yellow-700/50" : "bg-red-700/50";
 
-  const isLoading = navigation.state === "loading";
-
   return (
     <>
       {/* Add employee form (Show only for Admins via context flag) */}
@@ -226,7 +224,7 @@ export default function EmployeePerformanceDashboard() {
                 {score}
               </span>
               <span className="mt-1 text-base lg:text-lg opacity-70 select-none">
-                {view.toUpperCase()}
+              Numbers
               </span>
               
               {/* Score Controls: Show if it's the user's own record OR if user is Manager/Admin */}
@@ -244,7 +242,7 @@ export default function EmployeePerformanceDashboard() {
                     {/* Increase Score Button */}
                     <button 
                       onClick={() => updateField(emp.id, view, 1)}
-                      disabled={navigation.state === "submitting" || score >= 100}
+                      disabled={navigation.state === "submitting"}
                       className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed w-10 h-10 rounded-full flex items-center justify-center"
                       aria-label={`Increase ${emp.name}'s ${view} score`}
                     >
@@ -255,7 +253,7 @@ export default function EmployeePerformanceDashboard() {
 
               {/* Wrong Numbers Display and Controls */}
               <div className="mt-4 text-center">
-                <span className="text-sm opacity-70 select-none">WRONG #'s</span>
+                <span className="text-sm opacity-70 select-none">WRONG numbers</span>
                 <div className="flex items-center justify-center gap-2 mt-1">
                   {/* Decrease Wrong # Button: Show only for Admins */}
                   {isAdmin && (
