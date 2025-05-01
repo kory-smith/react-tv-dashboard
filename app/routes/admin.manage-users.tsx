@@ -144,15 +144,22 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
         const name = formData.get("name");
         const email = formData.get("email");
         const password = formData.get("password");
+        const confirmPassword = formData.get("confirmPassword");
         const roleValue = formData.get("role");
 
         // --- Validation ---
-        if (!name || !email || !password || !roleValue || typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string' || typeof roleValue !== 'string') {
+        if (!name || !email || !password || !confirmPassword || !roleValue || 
+            typeof name !== 'string' || typeof email !== 'string' || 
+            typeof password !== 'string' || typeof confirmPassword !== 'string' || 
+            typeof roleValue !== 'string') {
              return json({ error: "Missing required fields", formValues: { name: name?.toString() ?? '', email: email?.toString() ?? '', role: Role.EMPLOYEE} } satisfies ActionData, { status: 400 });
         }
-         if (password.length < 8) {
-             return json({ error: "Password must be at least 8 characters long", formValues: { name, email, role: Role.EMPLOYEE } } satisfies ActionData, { status: 400 });
-         }
+        if (password.length < 8) {
+            return json({ error: "Password must be at least 8 characters long", formValues: { name, email, role: Role.EMPLOYEE } } satisfies ActionData, { status: 400 });
+        }
+        if (password !== confirmPassword) {
+            return json({ error: "Passwords do not match", formValues: { name, email, role: Role.EMPLOYEE } } satisfies ActionData, { status: 400 });
+        }
         if (!(roleValue in Role)) { // Check if role is a valid enum value
              return json({ error: `Invalid role specified. Must be one of: ${Object.keys(Role).join(', ')}`, formValues: { name, email, role: Role.EMPLOYEE } } satisfies ActionData, { status: 400 });
         }
@@ -238,8 +245,11 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
     if (intent === "changePassword") {
         const userIdValue = formData.get("userId");
         const newPassword = formData.get("newPassword");
+        const confirmNewPassword = formData.get("confirmNewPassword");
 
-        if (!userIdValue || typeof userIdValue !== 'string' || !newPassword || typeof newPassword !== 'string') {
+        if (!userIdValue || typeof userIdValue !== 'string' || 
+            !newPassword || typeof newPassword !== 'string' ||
+            !confirmNewPassword || typeof confirmNewPassword !== 'string') {
             return json({ error: "Missing User ID or New Password" } satisfies ActionData, { status: 400 });
         }
         const userIdToUpdate = parseInt(userIdValue, 10);
@@ -248,6 +258,9 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
         }
         if (newPassword.length < 8) {
             return json({ error: "Password must be at least 8 characters", passwordChangeUserId: userIdToUpdate } satisfies ActionData, { status: 400 });
+        }
+        if (newPassword !== confirmNewPassword) {
+            return json({ error: "Passwords do not match", passwordChangeUserId: userIdToUpdate } satisfies ActionData, { status: 400 });
         }
         // Prevent admin from changing their own password here
         if (loggedInUser.id === userIdToUpdate) {
@@ -358,6 +371,7 @@ export default function ManageUsersPage() {
                              <input type="text" name="name" placeholder="Full Name" required className="px-3 py-2 rounded bg-slate-700" defaultValue={defaultFormName}/>
                              <input type="email" name="email" placeholder="Email Address" required className="px-3 py-2 rounded bg-slate-700" defaultValue={defaultFormEmail}/>
                              <input type="password" name="password" placeholder="Password (min 8 chars)" required minLength={8} className="px-3 py-2 rounded bg-slate-700" />
+                             <input type="password" name="confirmPassword" placeholder="Confirm Password" required minLength={8} className="px-3 py-2 rounded bg-slate-700" />
                               <select name="role" required className="px-3 py-2 rounded bg-slate-700" defaultValue={defaultFormRole}>
                                  {Object.values(Role).map(role => (<option key={role} value={role}>{role}</option>))}
                              </select>
@@ -418,8 +432,9 @@ export default function ManageUsersPage() {
                                              {actionData && 'error' in actionData && 'passwordChangeUserId' in actionData && actionData.passwordChangeUserId === user.id && <p className='text-red-400 mb-1 text-xs'>Error: {actionData.error}</p>}
                                             <input type="hidden" name="intent" value="changePassword" />
                                             <input type="hidden" name="userId" value={user.id} />
-                                            <div className="flex flex-col sm:flex-row gap-2 items-stretch">
-                                                <input type="password" name="newPassword" placeholder="New Password (min 8)" required minLength={8} className="px-2 py-1 rounded bg-slate-600 text-xs sm:text-sm flex-grow" />
+                                            <div className="flex flex-col gap-2">
+                                                <input type="password" name="newPassword" placeholder="New Password (min 8)" required minLength={8} className="px-2 py-1 rounded bg-slate-600 text-xs sm:text-sm" />
+                                                <input type="password" name="confirmNewPassword" placeholder="Confirm New Password" required minLength={8} className="px-2 py-1 rounded bg-slate-600 text-xs sm:text-sm" />
                                                 <button type="submit" disabled={isSubmitting && submittingIntent === 'changePassword' && submittingUserId === user.id} className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm disabled:opacity-50 whitespace-nowrap" >
                                                     {isSubmitting && submittingIntent === 'changePassword' && submittingUserId === user.id ? 'Saving...' : 'Save Pwd'}
                                                 </button>
