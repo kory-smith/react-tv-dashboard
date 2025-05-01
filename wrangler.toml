@@ -9,13 +9,13 @@ watch_dir = "src"
 [[d1_databases]]
 binding = "DB"
 database_name = "react_tv_dashboard"
-database_id = "d2619920-dc7c-46db-ba6f-d7b68bced00b"
+database_id = "2c91e1ea85124136a1a690984a5e0eea"
 migrations_dir = "d1/migrations"
 migrations_table = "d1_migrations"
 
 [[kv_namespaces]]
 binding = "SESSION_STORE"
-id = "placeholder-id" # Replace with actual KV ID after creation
+id = "2c91e1ea85124136a1a690984a5e0eea" # Replace with actual KV ID after creation
 
 [site]
 bucket = "./build/client"
