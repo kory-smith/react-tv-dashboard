@@ -434,8 +434,8 @@ export default function EmployeePerformanceDashboard() {
                   Numbers
                 </span>
 
-                {/* Score Controls */}
-                {(user?.employeeId === emp.id || isManager) && (
+                {/* Score Controls - only shown for day view */}
+                {(user?.employeeId === emp.id || isManager) && view === "day" && (
                   <div className="flex gap-2 mt-3">
                     {/* Decrease Score Button */}
                     <button
@@ -464,8 +464,8 @@ export default function EmployeePerformanceDashboard() {
                     WRONG numbers
                   </span>
                   <div className="flex items-center justify-center gap-2 mt-1">
-                    {/* Decrease Wrong # Button */}
-                    {isAdmin && (
+                    {/* Decrease Wrong # Button - only shown for day view */}
+                    {isAdmin && view === "day" && (
                       <button
                         onClick={() => updateField(emp.id, "wrongNumbers", -1)}
                         disabled={
@@ -481,8 +481,8 @@ export default function EmployeePerformanceDashboard() {
                     <span className="text-xl font-semibold select-none min-w-[2ch]">
                       {wrongNumbers}
                     </span>
-                    {/* Increase Wrong # Button */}
-                    {isManager && (
+                    {/* Increase Wrong # Button - only shown for day view */}
+                    {isManager && view === "day" && (
                       <button
                         onClick={() => updateField(emp.id, "wrongNumbers", 1)}
                         disabled={navigation.state === "submitting"}

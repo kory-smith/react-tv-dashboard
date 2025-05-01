@@ -20,9 +20,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const data = await request.json();
     
     // Validate the data
-    const validFields = ['day', 'week', 'month', 'wrongNumbers'];
+    const validFields = ['day', 'wrongNumbers'];
     if (!data.field || !validFields.includes(data.field)) {
       return json({ error: `Invalid field type. Must be one of: ${validFields.join(', ')}` }, { status: 400 });
+    }
+    
+    // Prevent updates on week or month views
+    if (data.field === 'week' || data.field === 'month') {
+      return json({ error: "Cannot add/remove data on week or month tabs" }, { status: 403 });
     }
     
     if (data.change !== 1 && data.change !== -1) {
@@ -64,6 +69,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
       newValue = newWrongNumbers;
     } else {
+      // Only allow updates for 'day' view - prevent score updates for 'week' and 'month'
+      if (data.field === 'week' || data.field === 'month') {
+        return json({ error: "Cannot add/remove scores directly on week or month tabs" }, { status: 403 });
+      }
+      
       // NEW Authorization: Employee themselves OR a Manager/Admin can update score
       if (user.employeeId !== id && !isManager(user)) {
           return json({ error: "Forbidden: You can only update your own score or must be a manager/admin." }, { status: 403 });
