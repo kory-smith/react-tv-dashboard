@@ -9,10 +9,22 @@ import {
     useNavigation 
 } from "react-router"; 
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs, redirect } from "@remix-run/node"; // Keep node imports for loader/action
-import { db } from "~/lib/db";
-import { Role, type User as PrismaUser } from "@prisma/client";
+import { db, getDb } from "~/lib/db";
+import { Role } from "../../src/types"; // Import Role from our types file instead of Prisma
+import type { User } from "../../src/types"; // Import User type from our types file
 import { requireUser, isAdmin } from "~/lib/auth.server";
 import { hashPassword } from "../../src/utils/password";
+import { 
+    getUserByEmail, 
+    getUsers, 
+    createUser, 
+    deleteUser, 
+    updateUser,
+    createEmployee,
+    createScore,
+    createTrendPoint,
+    getEmployeeByName,
+} from "../../src/db";
 
 // Type for the data fetched by the loader
 interface DisplayUser {
@@ -24,7 +36,7 @@ interface DisplayUser {
 
 // Type for the context passed from root
 type OutletContextType = { 
-  user: PrismaUser | null; 
+  user: User | null; 
 };
 
 // Updated ActionData type to include password change outcomes
@@ -46,7 +58,7 @@ type LoaderData = {
 
 // --- Loader --- 
 // Fetches the list of users directly from the DB
-export async function loader({ request }: LoaderFunctionArgs): Promise<Response> {
+export async function loader({ request, context }: LoaderFunctionArgs): Promise<Response> {
     const loggedInUser = await requireUser(request);
     if (!isAdmin(loggedInUser)) {
         return redirect("/"); 
@@ -58,28 +70,16 @@ export async function loader({ request }: LoaderFunctionArgs): Promise<Response>
 
     // Fetch users directly from the database instead of fetching the API route
     try {
-        const usersFromDb = await db.user.findMany({
-            select: {
-                id: true,
-                email: true,
-                role: true,
-                employee: { // Include employee name if linked
-                    select: {
-                        name: true
-                    }
-                }
-            },
-            orderBy: {
-                createdAt: 'asc'
-            }
-        });
-
-        // Map to include name directly for easier frontend use
-        const users: DisplayUser[] = usersFromDb.map(u => ({
+        // Use D1 database
+        const database = getDb(context?.env);
+        const usersResult = await getUsers(database);
+        
+        // Transform users for display
+        const users: DisplayUser[] = usersResult.map(u => ({
             id: u.id,
             email: u.email,
-            role: u.role,
-            name: u.employee?.name ?? null // Add name from linked employee
+            role: u.role as Role,
+            name: null // We'll need to add a join in the getUsers function to get employee name
         }));
 
         // Return showAddForm flag along with user data
@@ -94,7 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs): Promise<Response>
 
 // --- Action --- 
 // Handles user creation and deletion directly in the DB
-export async function action({ request }: ActionFunctionArgs): Promise<Response> { // Return Response explicitly
+export async function action({ request, context }: ActionFunctionArgs): Promise<Response> { // Return Response explicitly
      const loggedInUser = await requireUser(request);
      if (!isAdmin(loggedInUser)) {
         return json({ error: "Forbidden" } satisfies ActionData, { status: 403 });
@@ -102,6 +102,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
 
     const formData = await request.formData();
     const intent = formData.get("intent");
+    const database = getDb(context?.env);
 
     // --- Delete User --- 
     if (intent === "deleteUser") {
@@ -120,16 +121,12 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
         }
 
         try {
-            // Check if user exists (optional, delete is idempotent but good practice)
-            const userExists = await db.user.findUnique({
-                where: { id: userIdToDelete }, select: { id: true }
-            });
-            if (!userExists) {
-                 return json({ error: "User not found" } satisfies ActionData, { status: 404 });
+            // Delete user using D1
+            const success = await deleteUser(database, userIdToDelete);
+            
+            if (!success) {
+                return json({ error: "User not found" } satisfies ActionData, { status: 404 });
             }
-
-            // Delete user directly
-            await db.user.delete({ where: { id: userIdToDelete } });
 
             return json({ success: true, deletedUserId: userIdToDelete } satisfies ActionData);
 
@@ -162,70 +159,66 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
         let body = { name, email, role }; // For error reporting if needed
 
         try {
-             // Check for existing user/employee (moved inside try)
-            const existingUser = await db.user.findUnique({ where: { email } });
+            // Check for existing user (using D1)
+            const existingUser = await getUserByEmail(database, email);
             if (existingUser) {
                 return json({ error: `User with email ${email} already exists.`, formValues: body } satisfies ActionData, { status: 409 }); // 409 Conflict
             }
-            const existingEmployee = await db.employee.findFirst({ where: { name } });
-             if (existingEmployee) {
+            
+            // Check for existing employee (using D1)
+            const existingEmployee = await getEmployeeByName(database, name);
+            if (existingEmployee) {
                 return json({ error: `Employee with name ${name} already exists.`, formValues: body } satisfies ActionData, { status: 409 }); // 409 Conflict
             }
 
             // Hash password
             const hashedPassword = await hashPassword(password);
-
-            // Create User and linked Employee directly
-            const newUser = await db.user.create({
-                data: {
-                    email,
-                    hashedPassword,
-                    role,
-                    employee: {
-                        create: {
-                            name,
-                            wrongNumbers: 0,
-                            scores: {
-                                create: { day: 75, week: 75, month: 75 },
-                            },
-                        },
-                    },
-                },
-                include: { employee: true } // Include employee to get ID
+            
+            // Create employee first
+            const employee = await createEmployee(database, { name });
+            
+            if (!employee) {
+                throw new Error("Failed to create employee");
+            }
+            
+            // Create user with reference to employee
+            const newUser = await createUser(database, {
+                email,
+                hashedPassword,
+                role,
+                employeeId: employee.id
             });
-
+            
+            // Create initial score
+            await createScore(database, employee.id);
+            
             // Create initial trend points
-            if (newUser.employeeId && newUser.employee) { 
-                 const now = Date.now();
-                 const trendPoints = Array.from({ length: 24 }, (_, i) => ({
-                     employeeId: newUser.employeeId!,
-                     timestamp: new Date(now - (23 - i) * 3600_000),
-                     score: 75,
-                 }));
-                 await db.trendPoint.createMany({ data: trendPoints });
+            const now = Date.now();
+            for (let i = 0; i < 24; i++) {
+                await createTrendPoint(database, employee.id, 75);
             }
 
             // Return created user data
             const returnUser: DisplayUser = {
                 id: newUser.id,
                 email: newUser.email,
-                role: newUser.role,
-                name: newUser.employee?.name ?? null
+                role: newUser.role as Role,
+                name: employee.name
             };
+            
             return json({ success: true, newUser: returnUser } satisfies ActionData); 
 
         } catch (error: any) {
-             console.error("Error creating user directly:", error);
-            // Prisma unique constraint violation (just in case checks missed something)
-            if (error.code === 'P2002') {
-                 const target = error.meta?.target as string[] | undefined;
-                 if (target?.includes('email')) {
+            console.error("Error creating user directly:", error);
+            // D1 unique constraint violation
+            if (error.message?.includes("UNIQUE constraint failed")) {
+                if (error.message.includes("User.email")) {
                     return json({ error: `User with email ${email} already exists.`, formValues: body } satisfies ActionData, { status: 409 });
-                 } else if (target?.includes('name')) {
-                     return json({ error: `Employee with name ${name} already exists.`, formValues: body } satisfies ActionData, { status: 409 });
-                 } else {
-                     return json({ error: `Record already exists (constraint violation)`, formValues: body } satisfies ActionData, { status: 409 });
-                 }
+                } else if (error.message.includes("Employee.name")) {
+                    return json({ error: `Employee with name ${name} already exists.`, formValues: body } satisfies ActionData, { status: 409 });
+                } else {
+                    return json({ error: `Record already exists (constraint violation)`, formValues: body } satisfies ActionData, { status: 409 });
+                }
             }
             return json({ error: "Error creating user", formValues: body } satisfies ActionData, { status: 500 });
         }
@@ -246,31 +239,46 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
         if (newPassword.length < 8) {
             return json({ error: "Password must be at least 8 characters", passwordChangeUserId: userIdToUpdate } satisfies ActionData, { status: 400 });
         }
+        
         // Prevent admin from changing their own password here
         if (loggedInUser.id === userIdToUpdate) {
-             return json({ error: "Cannot change your own password here", passwordChangeUserId: userIdToUpdate } satisfies ActionData, { status: 400 });
+            return json({
+                error: "Please use the profile page to change your own password",
+                passwordChangeUserId: userIdToUpdate
+            } satisfies ActionData, { status: 400 });
         }
 
         try {
             // Hash the new password
-            const hashedNewPassword = await hashPassword(newPassword);
+            const hashedPassword = await hashPassword(newPassword);
+            
+            // Update user password
+            const updated = await updateUser(database, userIdToUpdate, { password: hashedPassword });
+            
+            if (!updated) {
+                return json({ 
+                    error: "User not found", 
+                    passwordChangeUserId: userIdToUpdate 
+                } satisfies ActionData, { status: 404 });
+            }
 
-            // Update the user's password
-            await db.user.update({
-                where: { id: userIdToUpdate },
-                data: { hashedPassword: hashedNewPassword },
-            });
-
-            return json({ success: true, updatedUserId: userIdToUpdate, message: "Password updated successfully" } satisfies ActionData);
-
+            return json({
+                success: true,
+                updatedUserId: userIdToUpdate,
+                message: "Password updated successfully"
+            } satisfies ActionData);
+            
         } catch (error: any) {
-             console.error("Error changing password:", error);
-            return json({ error: "Failed to update password", passwordChangeUserId: userIdToUpdate } satisfies ActionData, { status: 500 });
+            console.error("Error updating password:", error);
+            return json({
+                error: "Failed to update password",
+                passwordChangeUserId: userIdToUpdate
+            } satisfies ActionData, { status: 500 });
         }
     }
 
-    // Invalid intent
-    return json({ error: "Invalid intent" } satisfies ActionData, { status: 400 });
+    // If we get here, the intent wasn't recognized
+    return json({ error: "Invalid action" } satisfies ActionData, { status: 400 });
 }
 
 // --- Component --- 

@@ -93,6 +93,12 @@ export async function getEmployeeById(db: D1Database, id: number): Promise<Emplo
   return employee as Employee | null;
 }
 
+export async function getEmployeeByName(db: D1Database, name: string): Promise<Employee | null> {
+  const stmt = db.prepare('SELECT * FROM Employee WHERE name = ?').bind(name);
+  const employee = await stmt.first();
+  return employee as Employee | null;
+}
+
 export async function getEmployees(db: D1Database): Promise<Employee[]> {
   const { results } = await db.prepare('SELECT * FROM Employee ORDER BY id').all();
   return results as unknown as Employee[];
