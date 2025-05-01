@@ -31,22 +31,20 @@ model User {
 }
 
 model Employee {
-  id         Int          @id @default(autoincrement())
-  name       String
-  wrongNumbers Int        @default(0)
-  scores     Score?
-  trendPoints TrendPoint[]
-  user       User?        // Link back to the User model
+  id           Int          @id @default(autoincrement())
+  name         String
+  wrongNumbers Int          @default(0)
+  scores       Score[]      // Changed to one-to-many relationship
+  trendPoints  TrendPoint[]
+  user         User?        // Link back to the User model
 }
 
 model Score {
   id         Int      @id @default(autoincrement())
-  employeeId Int      @unique
+  employeeId Int
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  day        Int      @default(75)
-  week       Int      @default(75)
-  month      Int      @default(75)
-  updatedAt  DateTime @default(now()) @updatedAt
+  timestamp  DateTime @default(now())
+  score      Int      @default(0)
 }
 
 model TrendPoint {

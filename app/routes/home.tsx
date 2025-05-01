@@ -29,18 +29,21 @@ interface TrendPoint {
 interface Score {
   id: number;
   employeeId: number;
-  day: number;
-  week: number;
-  month: number;
-  updatedAt: string;
+  timestamp: string;
+  score: number;
 }
 
 interface Employee {
   id: number;
   name: string;
   wrongNumbers: number;
-  scores: Score | null | undefined;
+  scores: Score[];
   trendPoints: TrendPoint[];
+  processedScores?: {
+    day: number;
+    week: number;
+    month: number;
+  };
 }
 
 // --- Context Type ---
@@ -55,15 +58,33 @@ type OutletContextType = {
 
 // Fetch data directly in the loader, DO NOT require authentication
 export async function loader({ request }: LoaderFunctionArgs) {
+  const today = new Date();
+  const startOfDay = new Date(today);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const startOfWeek = new Date(today);
+  const dayOfWeek = startOfWeek.getDay();
+  const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+  startOfWeek.setDate(diff);
+  startOfWeek.setHours(0, 0, 0, 0);
+  
+  const startOfMonth = new Date(today);
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
   const employees = await db.employee.findMany({
     // Filter to include only employees linked to a user with the EMPLOYEE role
     where: {
       user: {
-        role: Role.EMPLOYEE // Assuming Role enum is available or import it
+        role: Role.EMPLOYEE
       }
     },
     include: {
-      scores: true,
+      scores: {
+        orderBy: {
+          timestamp: "desc"
+        }
+      },
       trendPoints: {
         orderBy: {
           timestamp: "asc",
@@ -71,8 +92,32 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     },
   });
-  // Use json() helper to return data correctly
-  return json(employees);
+
+  // Process employees to get the latest score for each time period
+  const processedEmployees = employees.map(employee => {
+    const latestDayScore = employee.scores.find(score => 
+      new Date(score.timestamp) >= startOfDay
+    )?.score ?? 0;
+
+    const latestWeekScore = employee.scores.find(score => 
+      new Date(score.timestamp) >= startOfWeek
+    )?.score ?? 0;
+
+    const latestMonthScore = employee.scores.find(score => 
+      new Date(score.timestamp) >= startOfMonth
+    )?.score ?? 0;
+
+    return {
+      ...employee,
+      processedScores: {
+        day: latestDayScore,
+        week: latestWeekScore,
+        month: latestMonthScore
+      }
+    };
+  });
+
+  return json(processedEmployees);
 }
 
 export default function EmployeePerformanceDashboard() {
@@ -102,13 +147,12 @@ export default function EmployeePerformanceDashboard() {
             const updatedEmp = { ...emp };
             if (lastEvent.field === 'wrongNumbers') {
               updatedEmp.wrongNumbers = lastEvent.newValue;
-            } else if (updatedEmp.scores) { // Check if scores object exists
-              updatedEmp.scores = {
-                ...updatedEmp.scores,
+            } else if (updatedEmp.processedScores) {
+              updatedEmp.processedScores = {
+                ...updatedEmp.processedScores,
                 [lastEvent.field]: lastEvent.newValue,
               };
             } else {
-              // Handle case where scores might be initially null (though unlikely with current loader)
               console.warn(`Scores object not found for employee ${emp.id} during SSE update.`);
             }
             return updatedEmp;
@@ -117,7 +161,7 @@ export default function EmployeePerformanceDashboard() {
         })
       );
     }
-  }, [lastEvent]); // Re-run only when a new event arrives
+  }, [lastEvent]);
 
   // Log SSE connection status and errors (optional)
   useEffect(() => {
@@ -232,10 +276,10 @@ export default function EmployeePerformanceDashboard() {
       <section className={`grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-2 gap-4 mb-12 ${navigation.state === "loading" && !lastEvent ? "opacity-50" : ""}`}>
         {/* Check if employees is an array before mapping */}
         {Array.isArray(employees) && employees.map((emp) => {
-          // Safely access score, default to 0 if scores object is null/undefined
-          const score = emp.scores?.[view] ?? 0; 
+          // Safely access score from processedScores
+          const score = emp.processedScores?.[view] ?? 0;
           const wrongNumbers = emp.wrongNumbers;
-          const currentBgColor = emp.scores ? bgColor(score) : "bg-slate-700/50";
+          const currentBgColor = bgColor(score);
 
           return (
             <div

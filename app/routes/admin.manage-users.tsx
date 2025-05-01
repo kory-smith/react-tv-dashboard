@@ -186,7 +186,10 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
                             name,
                             wrongNumbers: 0,
                             scores: {
-                                create: { day: 75, week: 75, month: 75 },
+                                create: { 
+                                    score: 0, 
+                                    timestamp: new Date() 
+                                }
                             },
                         },
                     },

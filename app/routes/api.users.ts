@@ -87,7 +87,7 @@ export async function action({ request }: ActionFunctionArgs) {
         if (existingUser) {
             return json({ message: "User with this email already exists" }, { status: 409 }); // 409 Conflict
         }
-        const existingEmployee = await db.employee.findUnique({ where: { name } });
+        const existingEmployee = await db.employee.findFirst({ where: { name } });
          if (existingEmployee) {
             return json({ message: "Employee with this name already exists" }, { status: 409 }); // 409 Conflict
         }
@@ -106,10 +106,9 @@ export async function action({ request }: ActionFunctionArgs) {
                         name,
                         wrongNumbers: 0,
                         scores: {
-                            create: {
-                                day: 75, // Default scores
-                                week: 75,
-                                month: 75,
+                            create: { 
+                                score: 0,
+                                timestamp: new Date()
                             },
                         },
                     },

@@ -65,9 +65,8 @@ async function main() {
                             wrongNumbers: 0,
                             scores: {
                                 create: {
-                                    day: Math.floor(Math.random() * 51) + 50, // Random initial score 50-100
-                                    week: Math.floor(Math.random() * 51) + 50,
-                                    month: Math.floor(Math.random() * 51) + 50,
+                                    score: Math.floor(Math.random() * 51), // Random initial score 0-50
+                                    timestamp: new Date()
                                 },
                             },
                         },
@@ -87,12 +86,15 @@ async function main() {
                 const currentEmployee = user.employee;
                 const currentScores = user.employee.scores;
                 const employeeId = user.employeeId; // Already checked non-null via user.employeeId
+                
+                // Use the score from the first entry (if available) or default to 0
+                const initialScore = currentScores.length > 0 ? currentScores[0].score : 0;
 
                 const now = Date.now();
                 const trendPoints = Array.from({ length: 24 }, (_, i) => ({
                     employeeId: employeeId, // Guaranteed non-null
                     timestamp: new Date(now - (23 - i) * 3600_000),
-                    score: currentScores.day, // Use non-null constant
+                    score: initialScore, // Use the score from the first entry
                 }));
                 await prisma.trendPoint.createMany({ data: trendPoints });
                 console.log(`Created initial trend points for ${currentEmployee.name}`); // Use non-null constant

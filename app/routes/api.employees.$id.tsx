@@ -35,7 +35,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       include: { scores: true },
     });
     
-    if (!employee || !employee.scores) {
+    if (!employee) {
       return json({ error: "Employee not found" }, { status: 404 });
     }
     
@@ -69,34 +69,67 @@ export async function action({ request, params }: ActionFunctionArgs) {
           return json({ error: "Forbidden: You can only update your own score or must be a manager/admin." }, { status: 403 });
       }
 
-      // Update the score for the specified view (day, week, month)
-      if (!employee.scores) { // Extra check just in case scores are null
-          return json({ error: "Employee scores not found" }, { status: 404 });
-      }
-      const currentScore = employee.scores[data.field as 'day' | 'week' | 'month'];
-      const newScore = Math.max(0, Math.min(100, currentScore + data.change));
-
-      // Update the score in the database
-      const updatedScoreRecord = await db.score.update({
-        where: { employeeId: id },
-        data: { [data.field]: newScore },
+      // Get the latest score for this employee for the view period
+      const viewPeriod = data.field; // 'day', 'week', or 'month'
+      
+      // Find the latest score for this period
+      const now = new Date();
+      const startOfPeriod = getStartOfPeriod(now, viewPeriod);
+      
+      const latestScore = await db.score.findFirst({
+        where: {
+          employeeId: id,
+          timestamp: {
+            gte: startOfPeriod
+          }
+        },
+        orderBy: {
+          timestamp: 'desc'
+        }
       });
+      
+      // Calculate the new score value
+      const currentScore = latestScore?.score ?? 0; // Default to 0 if no score exists
+      const newScore = Math.max(0, Math.min(100, currentScore + data.change));
+      
+      // Create a new score entry
+      await db.score.create({
+        data: {
+          employeeId: id,
+          score: newScore,
+          timestamp: now,
+        },
+      });
+      
       newValue = newScore;
-
+      
       // If updating the day score, also add a trend point
       if (data.field === 'day') {
         await db.trendPoint.create({
           data: {
             employeeId: id,
             score: newScore,
-            timestamp: new Date(),
+            timestamp: now,
           },
         });
       }
+      
       // Fetch the updated employee data to return consistently
       updatedData = await db.employee.findUnique({
-          where: { id },
-          include: { scores: true },
+        where: { id },
+        include: { 
+          scores: {
+            where: {
+              timestamp: {
+                gte: startOfPeriod
+              }
+            },
+            orderBy: {
+              timestamp: 'desc'
+            },
+            take: 1
+          }
+        },
       });
     }
 
@@ -112,10 +145,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     return json(updatedData);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error updating employee data:", error);
     // Check for specific error types if needed
     // if (error instanceof Prisma.PrismaClientKnownRequestError) { ... }
     return json({ error: "Error updating employee data" }, { status: 500 });
   }
+}
+
+// Helper function to get the start date for a period
+function getStartOfPeriod(date: Date, period: string): Date {
+  const result = new Date(date);
+  
+  switch(period) {
+    case 'day':
+      result.setHours(0, 0, 0, 0);
+      break;
+    case 'week':
+      const dayOfWeek = result.getDay();
+      const diff = result.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust for Sunday
+      result.setDate(diff);
+      result.setHours(0, 0, 0, 0);
+      break;
+    case 'month':
+      result.setDate(1);
+      result.setHours(0, 0, 0, 0);
+      break;
+  }
+  
+  return result;
 } 
