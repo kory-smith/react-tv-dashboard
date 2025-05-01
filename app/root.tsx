@@ -11,7 +11,7 @@ import {
 } from "react-router";
 import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { getUser, isAdmin, isManager } from "~/lib/auth.server";
-import type { User } from "../src/types"; // Import User type from our types file
+import { type User } from "@prisma/client";
 
 import type { Route } from "./+types/root";
 import "./app.css";

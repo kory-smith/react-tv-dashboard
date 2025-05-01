@@ -1,70 +1,87 @@
-# React TV Dashboard
+# Welcome to React Router!
 
-A TV dashboard for displaying employee performance metrics.
+A modern, production-ready template for building full-stack React applications using React Router.
+
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
 
 ## Features
 
-- User authentication with role-based access control
-- Employee performance tracking
-- Real-time score updates
-- Trend visualization
-- Responsive design for TV displays
-
-## Tech Stack
-
-- [Bun](https://bun.sh) - JavaScript runtime
-- [Hono](https://hono.dev) - Web framework
-- [SQLite](https://www.sqlite.org) - Database
-- [React](https://react.dev) - UI library
-- [TypeScript](https://www.typescriptlang.org) - Type safety
+- 🚀 Server-side rendering
+- ⚡️ Hot Module Replacement (HMR)
+- 📦 Asset bundling and optimization
+- 🔄 Data loading and mutations
+- 🔒 TypeScript by default
+- 🎉 TailwindCSS for styling
+- 📖 [React Router docs](https://reactrouter.com/)
 
 ## Getting Started
 
-1. Install dependencies:
+### Installation
+
+Install the dependencies:
 
 ```bash
-bun install
+npm install
 ```
 
-2. Start the development server:
+### Development
+
+Start the development server with HMR:
 
 ```bash
-bun run dev
+npm run dev
 ```
 
-3. Open your browser and navigate to `http://localhost:3000`
+Your application will be available at `http://localhost:5173`.
 
-## Development
+## Building for Production
 
-The project uses Bun as the JavaScript runtime and package manager. The development server uses SQLite for local development.
+Create a production build:
 
-### Database
-
-The database schema is defined in `src/db/schema.ts`. The database is initialized and seeded with sample data when the development server starts.
-
-### API Routes
-
-- `GET /api/users` - Get all users
-- `GET /api/employees` - Get all employees
-- `GET /api/scores` - Get all scores
-- `GET /api/trends` - Get all trend points
+```bash
+npm run build
+```
 
 ## Deployment
 
-The project can be deployed to any platform that supports Bun. For production deployment, you'll need to:
+### Docker Deployment
 
-1. Build the project:
-
-```bash
-bun run build
-```
-
-2. Start the production server:
+To build and run using Docker:
 
 ```bash
-bun run start
+docker build -t my-app .
+
+# Run the container
+docker run -p 3000:3000 my-app
 ```
 
-## License
+The containerized application can be deployed to any platform that supports Docker, including:
 
-MIT
+- AWS ECS
+- Google Cloud Run
+- Azure Container Apps
+- Digital Ocean App Platform
+- Fly.io
+- Railway
+
+### DIY Deployment
+
+If you're familiar with deploying Node applications, the built-in app server is production-ready.
+
+Make sure to deploy the output of `npm run build`
+
+```
+├── package.json
+├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
+├── build/
+│   ├── client/    # Static assets
+│   └── server/    # Server-side code
+```
+
+## Styling
+
+This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
+
+---
+
+Built with ❤️ using React Router.

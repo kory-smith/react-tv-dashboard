@@ -10,11 +10,10 @@ import {
 } from "recharts";
 import { useLoaderData, useNavigation, useSubmit, useOutletContext } from "react-router";
 import { type LoaderFunctionArgs, json } from "@remix-run/node";
-import { getDb } from "~/lib/db"; // Import db client
-import type { User } from "../../src/types"; // Fix import path with correct relative path
-import { Role } from "../../src/types"; // Fix import path with correct relative path
+import { db } from "~/lib/db"; // Import db client
+import { type User } from "@prisma/client"; // Import User type
+import { Role } from "@prisma/client"; // Import Role enum
 import { useSSE } from "~/hooks/useSSE"; // Import the SSE hook
-import { getDashboardData } from "../../src/db"; // Fix import path with correct relative path
 
 // -------------------- Types --------------------
 
@@ -55,13 +54,23 @@ type OutletContextType = {
 // -------------------- Component --------------------
 
 // Fetch data directly in the loader, DO NOT require authentication
-export async function loader({ request, context }: LoaderFunctionArgs) {
-  // Use the D1 database client
-  const database = getDb(context?.env);
-  
-  // Use our D1 function to get dashboard data
-  const { employees } = await getDashboardData(database as any);
-  
+export async function loader({ request }: LoaderFunctionArgs) {
+  const employees = await db.employee.findMany({
+    // Filter to include only employees linked to a user with the EMPLOYEE role
+    where: {
+      user: {
+        role: Role.EMPLOYEE // Assuming Role enum is available or import it
+      }
+    },
+    include: {
+      scores: true,
+      trendPoints: {
+        orderBy: {
+          timestamp: "asc",
+        },
+      },
+    },
+  });
   // Use json() helper to return data correctly
   return json(employees);
 }
