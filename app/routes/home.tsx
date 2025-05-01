@@ -110,19 +110,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  // Process employees to get the latest score for each time period
+  // Process employees to get the accumulated score for each time period
   const processedEmployees = employees.map((employee) => {
-    const latestDayScore =
-      employee.scores.find((score) => new Date(score.timestamp) >= startOfDay)
-        ?.score ?? 0;
+    // Sum all scores for today
+    const dayScores = employee.scores
+      .filter((score) => new Date(score.timestamp) >= startOfDay);
+    const latestDayScore = Math.max(0, dayScores.reduce((sum, score) => sum + score.score, 0));
 
-    const latestWeekScore =
-      employee.scores.find((score) => new Date(score.timestamp) >= startOfWeek)
-        ?.score ?? 0;
+    // Sum all scores for this week
+    const weekScores = employee.scores
+      .filter((score) => new Date(score.timestamp) >= startOfWeek);
+    const latestWeekScore = Math.max(0, weekScores.reduce((sum, score) => sum + score.score, 0));
 
-    const latestMonthScore =
-      employee.scores.find((score) => new Date(score.timestamp) >= startOfMonth)
-        ?.score ?? 0;
+    // Sum all scores for this month
+    const monthScores = employee.scores
+      .filter((score) => new Date(score.timestamp) >= startOfMonth);
+    const latestMonthScore = Math.max(0, monthScores.reduce((sum, score) => sum + score.score, 0));
 
     return {
       ...employee,
@@ -219,26 +222,14 @@ export default function EmployeePerformanceDashboard() {
                 const isWithinWeek = scoreTime >= startOfWeek;
                 const isWithinMonth = scoreTime >= startOfMonth;
                 
-                // Update all affected time periods
+                // When we receive an SSE event, the lastEvent.newValue is already the total sum
+                // calculated on the server side, so we directly set it (don't add to existing)
                 updatedEmp.processedScores = {
                   ...updatedEmp.processedScores,
-                  // If this was a day update and it falls within today, update day score
-                  day: lastEvent.field === "day" && isWithinDay 
-                    ? lastEvent.newValue 
-                    : updatedEmp.processedScores.day,
-                  // If this was a week update and it falls within this week, update week score
-                  // OR if this was a day update that falls within this week, also update week score
-                  week: (lastEvent.field === "week" && isWithinWeek) || 
-                        (lastEvent.field === "day" && isWithinWeek)
-                    ? lastEvent.newValue 
-                    : updatedEmp.processedScores.week,
-                  // If this was a month update and it falls within this month, update month score
-                  // OR if this was a day/week update that falls within this month, also update month score
-                  month: (lastEvent.field === "month" && isWithinMonth) || 
-                         (lastEvent.field === "day" && isWithinMonth) || 
-                         (lastEvent.field === "week" && isWithinMonth)
-                    ? lastEvent.newValue 
-                    : updatedEmp.processedScores.month,
+                  // Update with the new total score value from the server
+                  day: lastEvent.field === "day" ? lastEvent.newValue : updatedEmp.processedScores.day,
+                  week: lastEvent.field === "week" ? lastEvent.newValue : updatedEmp.processedScores.week,
+                  month: lastEvent.field === "month" ? lastEvent.newValue : updatedEmp.processedScores.month,
                 };
               }
             } else {

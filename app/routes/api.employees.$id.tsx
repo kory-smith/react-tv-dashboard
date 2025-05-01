@@ -88,27 +88,36 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }
       });
       
-      // Calculate the new score value
-      const currentScore = latestScore?.score ?? 0; // Default to 0 if no score exists
-      const newScore = Math.max(0, currentScore + data.change); // Only limit the minimum to 0, no maximum limit
-      
-      // Create a new score entry
+      // Create a new score entry with just the change value (+1 or -1)
+      // We'll sum these up on the client side
       await db.score.create({
         data: {
           employeeId: id,
-          score: newScore,
+          score: data.change, // Just store the increment/decrement (+1 or -1)
           timestamp: now,
         },
       });
       
-      newValue = newScore;
+      // Calculate the newValue for the emitter by summing all scores in the period
+      const scoresInPeriod = await db.score.findMany({
+        where: {
+          employeeId: id,
+          timestamp: {
+            gte: startOfPeriod
+          }
+        }
+      });
       
-      // If updating the day score, also add a trend point
+      // Sum all scores in the period (including the one we just added)
+      const newScore = scoresInPeriod.reduce((sum, score) => sum + score.score, 0);
+      newValue = Math.max(0, newScore); // Ensure score doesn't go below 0
+      
+      // If updating the day score, also add a trend point with the accumulated score
       if (data.field === 'day') {
         await db.trendPoint.create({
           data: {
             employeeId: id,
-            score: newScore,
+            score: newValue, // Use the calculated accumulated score
             timestamp: now,
           },
         });
