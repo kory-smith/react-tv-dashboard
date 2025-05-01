@@ -355,19 +355,39 @@ export default function EmployeePerformanceDashboard() {
         </form>
       )} */}
 
-      {/* View Toggle */}
-      <div className="flex gap-4 mb-6">
-        {["day", "week", "month"].map((v) => (
-          <Link
-            key={v}
-            to={`?view=${v}`}
-            className={`px-6 py-3 rounded-2xl text-xl lg:text-2xl transition-colors ${
-              view === v ? "bg-blue-600" : "bg-slate-800 hover:bg-slate-700"
-            }`}
-          >
-            {v.toUpperCase()}
-          </Link>
-        ))}
+      {/* Period info and view toggle */}
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl lg:text-3xl font-semibold select-none">
+          {(() => {
+            const today = new Date();
+            
+            if (view === "day") {
+              return `${today.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+            } else if (view === "week") {
+              const startOfWeek = new Date(today);
+              const dayOfWeek = startOfWeek.getDay();
+              const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+              startOfWeek.setDate(diff);
+              return `Week starting ${startOfWeek.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+            } else {
+              return `Month of ${today.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}`;
+            }
+          })()}
+        </h2>
+        
+        <div className="flex gap-4">
+          {["day", "week", "month"].map((v) => (
+            <Link
+              key={v}
+              to={`?view=${v}`}
+              className={`px-6 py-3 rounded-2xl text-xl transition-colors ${
+                view === v ? "bg-blue-600" : "bg-slate-800 hover:bg-slate-700"
+              }`}
+            >
+              {v.toUpperCase()}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* Employee Grid */}
