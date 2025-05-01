@@ -1,6 +1,6 @@
 import { createCookieSessionStorage, redirect } from "@remix-run/node";
 import { db } from "./db";
-import bcrypt from "bcrypt";
+import { hashPassword, verifyPassword } from "../../src/utils/password";
 
 // Ensure SESSION_SECRET is set in your environment variables
 if (!process.env.SESSION_SECRET) {
@@ -103,14 +103,7 @@ export async function requireUser(request: Request) {
 
 // --- Password Hashing ---
 
-export async function hashPassword(password: string): Promise<string> {
-    const saltRounds = 10; // Standard practice
-    return bcrypt.hash(password, saltRounds);
-}
-
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-    return bcrypt.compare(password, hash);
-}
+export { hashPassword, verifyPassword } from "../../src/utils/password";
 
 // --- User Creation (Admin Only) ---
 // We'll add the actual creation logic later, protected by role checks

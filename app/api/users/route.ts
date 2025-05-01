@@ -1,6 +1,6 @@
 import { db } from "~/lib/db";
 import { NextResponse } from "next/server"; // Assuming Next.js API routes
-import bcrypt from 'bcrypt';
+import { hashPassword } from "../../../src/utils/password";
 import { Role } from "@prisma/client";
 // Import your authentication/session logic here
 // e.g., import { getServerSession } from "next-auth/next"
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
         }
 
         // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await hashPassword(password);
 
         // Create User and linked Employee in transaction
         const newUser = await db.user.create({

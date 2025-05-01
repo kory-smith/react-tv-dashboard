@@ -2,7 +2,7 @@
 import type { Env, SessionData, User } from '../types';
 import { Role } from '../types';
 import { getUserById } from '../db';
-import * as bcryptjs from 'bcryptjs';
+import { hashPassword, verifyPassword } from '../utils/password';
 import { nanoid } from 'nanoid';
 
 // Session duration constants (in seconds)
@@ -10,18 +10,14 @@ const SESSION_DURATION = 24 * 60 * 60; // 24 hours
 const EXTENDED_SESSION_DURATION = 30 * 24 * 60 * 60; // 30 days
 
 /**
- * Hash a password using bcryptjs
+ * Hash a password using crypto
  */
-export async function hashPassword(password: string): Promise<string> {
-  return bcryptjs.hash(password, 10);
-}
+export { hashPassword } from '../utils/password';
 
 /**
  * Verify a password against a hash
  */
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcryptjs.compare(password, hash);
-}
+export { verifyPassword } from '../utils/password';
 
 /**
  * Create a new session for a user

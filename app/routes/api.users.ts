@@ -1,6 +1,6 @@
 import { db } from "~/lib/db";
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node"; 
-import bcrypt from 'bcrypt';
+import { hashPassword } from "../../src/utils/password";
 import { Role } from "@prisma/client";
 import { requireUser, isAdmin } from "~/lib/auth.server"; // Use Remix auth
 
@@ -93,7 +93,7 @@ export async function action({ request }: ActionFunctionArgs) {
         }
 
         // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await hashPassword(password);
 
         // Create User and linked Employee in transaction
         const newUser = await db.user.create({

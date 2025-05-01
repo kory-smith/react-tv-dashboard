@@ -1,12 +1,20 @@
 // Seed script for D1 database
 // Run with: wrangler d1 execute react_tv_dashboard --file=./d1/seed.sql
 
-const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 // Generate a hashed password for the admin user
 async function generateHash() {
-  const hash = await bcrypt.hash('password123', 10);
-  console.log(`Admin password hash: ${hash}`);
+  // Use scrypt for password hashing
+  const salt = crypto.randomBytes(16).toString('hex');
+  
+  crypto.scrypt('password123', salt, 64, (err, derivedKey) => {
+    if (err) throw err;
+    
+    // Format: salt:hash
+    const hash = `${salt}:${derivedKey.toString('hex')}`;
+    console.log(`Admin password hash: ${hash}`);
+  });
 }
 
 // Call the function to generate the hash

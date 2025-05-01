@@ -1,7 +1,7 @@
 import { PrismaClient, Role, Prisma } from '@prisma/client';
 // Use type-only imports for models
 import type { User, Employee, Score } from '@prisma/client'; 
-import bcrypt from 'bcrypt';
+import { hashPassword } from '../src/utils/password';
 
 const prisma = new PrismaClient();
 
@@ -26,7 +26,7 @@ async function main() {
   if (existingAdmin) {
     console.log('Admin user already exists.');
   } else {
-    const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
+    const hashedAdminPassword = await hashPassword(adminPassword);
     const adminUser = await prisma.user.create({
       data: {
         email: adminEmail,
@@ -48,7 +48,7 @@ async function main() {
     
     if (!user) {
         // Hash password
-        const hashedPassword = await bcrypt.hash(mock.password, 10);
+        const hashedPassword = await hashPassword(mock.password);
         
         // Create User and linked Employee in one transaction
         try {

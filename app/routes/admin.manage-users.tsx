@@ -12,7 +12,7 @@ import { json, type LoaderFunctionArgs, type ActionFunctionArgs, redirect } from
 import { db } from "~/lib/db";
 import { Role, type User as PrismaUser } from "@prisma/client";
 import { requireUser, isAdmin } from "~/lib/auth.server";
-import bcrypt from 'bcrypt';
+import { hashPassword } from "../../src/utils/password";
 
 // Type for the data fetched by the loader
 interface DisplayUser {
@@ -173,7 +173,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
             }
 
             // Hash password
-            const hashedPassword = await bcrypt.hash(password, 10);
+            const hashedPassword = await hashPassword(password);
 
             // Create User and linked Employee directly
             const newUser = await db.user.create({
@@ -253,7 +253,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
 
         try {
             // Hash the new password
-            const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+            const hashedNewPassword = await hashPassword(newPassword);
 
             // Update the user's password
             await db.user.update({
