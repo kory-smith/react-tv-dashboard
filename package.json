@@ -4,21 +4,27 @@
   "type": "module",
   "scripts": {
     "build": "react-router build",
-    "dev": "react-router dev",
-    "start": "react-router-serve ./build/server/index.js",
+    "dev": "wrangler dev --local",
+    "start": "wrangler dev",
     "typecheck": "react-router typegen && tsc",
-    "db:seed": "bunx prisma db seed"
+    "deploy": "wrangler deploy",
+    "db:seed": "wrangler d1 execute react_tv_dashboard --file=./d1/seed.sql",
+    "db:migrate": "wrangler d1 execute react_tv_dashboard --file=./d1/schema.sql"
   },
   "prisma": {
     "seed": "bunx tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@cloudflare/kv-asset-handler": "^0.4.0",
     "@prisma/client": "^6.6.0",
     "@react-router/node": "^7.5.1",
     "@react-router/serve": "^7.5.1",
     "@remix-run/node": "^2.9.2",
     "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.2",
     "isbot": "^5.1.17",
+    "itty-router": "^5.0.18",
+    "nanoid": "^5.1.5",
     "prisma": "^6.6.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -29,9 +35,11 @@
     "tsx": "^4.19.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240419.0",
     "@react-router/dev": "^7.5.1",
     "@tailwindcss/vite": "^4.0.0",
     "@types/bcrypt": "^5.0.2",
+    "@types/bcryptjs": "^2.4.7",
     "@types/node": "^20",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",
@@ -39,6 +47,7 @@
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
     "vite": "^5.4.11",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "wrangler": "^3.39.0"
   }
 }

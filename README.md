@@ -1,87 +1,178 @@
-# Welcome to React Router!
+# React TV Dashboard with Cloudflare Workers and D1
 
-A modern, production-ready template for building full-stack React applications using React Router.
-
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
+This project is a TV dashboard application built with React for the frontend and Cloudflare Workers with D1 for the backend. It features employee performance tracking, scoring, and trend analysis.
 
 ## Features
 
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
+- **User Authentication**: Secure login/logout with role-based access control
+- **Employee Management**: Create, read, update, and delete employee records
+- **Performance Tracking**: Score tracking with historical trend data
+- **Dashboard Views**: Visualize employee performance metrics
+- **Wrong Number Tracking**: Track and impact scores based on wrong numbers
 
-## Getting Started
+## Technology Stack
 
-### Installation
+- **Frontend**: React, React Router, TailwindCSS, Recharts
+- **Backend**: Cloudflare Workers, D1 (SQLite-compatible database)
+- **Authentication**: Session-based authentication with KV store
+- **Deployment**: Cloudflare Pages and Workers
 
-Install the dependencies:
+## Local Development Setup
 
-```bash
-npm install
-```
+### Prerequisites
 
-### Development
+- Node.js 18+
+- Bun (for package management)
+- Wrangler CLI (for Cloudflare Workers development)
 
-Start the development server with HMR:
+### Initial Setup
 
-```bash
-npm run dev
-```
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd react-tv-dashboard
+   ```
 
-Your application will be available at `http://localhost:5173`.
+2. **Install dependencies**:
+   ```bash
+   bun install
+   ```
 
-## Building for Production
+3. **Configure Wrangler**:
+   If you haven't already, install and authenticate the Wrangler CLI:
+   ```bash
+   bun add -g wrangler
+   wrangler login
+   ```
 
-Create a production build:
+4. **Create local D1 database**:
+   ```bash
+   wrangler d1 create react_tv_dashboard
+   ```
+   
+   Update the `wrangler.toml` file with your database ID:
+   ```toml
+   [[d1_databases]]
+   binding = "DB"
+   database_name = "react_tv_dashboard"
+   database_id = "<your-db-id>" # Replace with actual DB ID
+   ```
 
-```bash
-npm run build
-```
+5. **Create KV namespace**:
+   ```bash
+   wrangler kv:namespace create SESSION_STORE
+   ```
+   
+   Update the `wrangler.toml` file with your KV namespace ID:
+   ```toml
+   [[kv_namespaces]]
+   binding = "SESSION_STORE"
+   id = "<your-kv-id>" # Replace with actual KV ID
+   ```
+
+6. **Initialize the database schema**:
+   ```bash
+   wrangler d1 execute react_tv_dashboard --file=./d1/schema.sql
+   ```
+
+7. **Seed the database with test data**:
+   ```bash
+   wrangler d1 execute react_tv_dashboard --file=./d1/seed.sql
+   ```
+
+### Running Locally
+
+1. **Start the development server**:
+   ```bash
+   bun run dev
+   ```
+
+2. **Open your browser** to http://localhost:8788
 
 ## Deployment
 
-### Docker Deployment
+### Deploy to Cloudflare
 
-To build and run using Docker:
+1. **Build the application**:
+   ```bash
+   bun run build
+   ```
 
-```bash
-docker build -t my-app .
+2. **Deploy to Cloudflare Workers**:
+   ```bash
+   wrangler deploy
+   ```
 
-# Run the container
-docker run -p 3000:3000 my-app
-```
+### Database Migrations in Production
 
-The containerized application can be deployed to any platform that supports Docker, including:
+1. **Create a new migration file** in `d1/migrations/` with a timestamp prefix (e.g., `0001_add_new_field.sql`)
 
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
+2. **Apply the migration to production**:
+   ```bash
+   wrangler d1 execute react_tv_dashboard --file=./d1/migrations/0001_add_new_field.sql
+   ```
 
-### DIY Deployment
-
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
+## Project Structure
 
 ```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
+react-tv-dashboard/
+├── app/                  # React application code
+│   ├── routes/           # React Router routes
+│   ├── components/       # React components
+│   └── hooks/            # Custom React hooks
+├── d1/                   # D1 database files
+│   ├── migrations/       # Database migrations
+│   ├── schema.sql        # Database schema
+│   └── seed.sql          # Seed data
+├── src/                  # Worker code
+│   ├── auth/             # Authentication logic
+│   ├── db/               # Database access layer
+│   ├── routes/           # API routes
+│   ├── types.ts          # TypeScript type definitions
+│   └── worker.ts         # Main worker entry point
+├── public/               # Static assets
+├── wrangler.toml         # Wrangler configuration
+└── package.json          # Project dependencies
 ```
 
-## Styling
+## Authentication
 
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
+The application uses session-based authentication with Cloudflare Workers KV store for session storage. Passwords are hashed using bcryptjs.
 
----
+Default admin credentials:
+- Email: admin@example.com
+- Password: password123
 
-Built with ❤️ using React Router.
+## API Endpoints
+
+### Authentication
+- `POST /api/login` - User login
+- `POST /api/logout` - User logout
+- `GET /api/me` - Get current user info
+
+### User Management
+- `GET /api/users` - List all users (admin only)
+- `POST /api/users` - Create a user (admin only)
+- `GET /api/users/:id` - Get a specific user
+- `PUT /api/users/:id` - Update a user
+- `DELETE /api/users/:id` - Delete a user (admin only)
+
+### Employee Management
+- `GET /api/employees` - List all employees
+- `POST /api/employees` - Create an employee
+- `GET /api/employees/:id` - Get a specific employee
+- `PUT /api/employees/:id` - Update an employee
+- `DELETE /api/employees/:id` - Delete an employee
+
+### Score Management
+- `GET /api/employees/:id/score` - Get an employee's score
+- `PUT /api/employees/:id/score` - Update an employee's score
+- `POST /api/employees/:id/wrong-number` - Increment wrong number count
+- `GET /api/dashboard` - Get dashboard data
+
+### Trend Tracking
+- `GET /api/employees/:id/trends` - Get an employee's trend points
+
+## License
+
+[MIT](LICENSE)
