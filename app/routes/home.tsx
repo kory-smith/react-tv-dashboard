@@ -13,6 +13,7 @@ import {
   useNavigation,
   useSubmit,
   useOutletContext,
+  Link,
 } from "react-router";
 import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { db } from "~/lib/db"; // Import db client
@@ -59,10 +60,21 @@ type OutletContextType = {
   isManager: boolean;
 };
 
+// Loader return type
+interface LoaderData {
+  employees: Employee[];
+  view: ViewMode;
+}
+
 // -------------------- Component --------------------
 
 // Fetch data directly in the loader, DO NOT require authentication
 export async function loader({ request }: LoaderFunctionArgs) {
+  // Get the view parameter from the URL
+  const url = new URL(request.url);
+  const viewParam = url.searchParams.get("view") as ViewMode | null;
+  const view = viewParam && ["day", "week", "month"].includes(viewParam) ? viewParam : "day";
+
   const today = new Date();
   const startOfDay = new Date(today);
   startOfDay.setHours(0, 0, 0, 0);
@@ -122,12 +134,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   });
 
-  return json(processedEmployees);
+  // Convert the data to match our interfaces
+  const employeesWithCorrectTypes = processedEmployees.map(emp => ({
+    ...emp,
+    scores: emp.scores.map(score => ({
+      ...score,
+      timestamp: score.timestamp.toString()
+    })),
+    trendPoints: emp.trendPoints.map(point => ({
+      ...point,
+      timestamp: point.timestamp.toString()
+    }))
+  }));
+
+  return json<LoaderData>({
+    employees: employeesWithCorrectTypes as Employee[],
+    view,
+  });
 }
 
 export default function EmployeePerformanceDashboard() {
   // Explicitly type the expected data from the loader
-  const initialEmployees = useLoaderData<Employee[]>();
+  const { employees: initialEmployees, view } = useLoaderData<typeof loader>();
   // Use state to manage employees data so it can be updated by SSE
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   // Get user and flags from Outlet context
@@ -135,7 +163,6 @@ export default function EmployeePerformanceDashboard() {
 
   const navigation = useNavigation();
   const submit = useSubmit();
-  const [view, setView] = useState<ViewMode>("day");
 
   // -- SSE Hook Integration --
   const { lastEvent, isConnected, error: sseError } = useSSE("/api/events");
@@ -340,15 +367,15 @@ export default function EmployeePerformanceDashboard() {
       {/* View Toggle */}
       <div className="flex gap-4 mb-6">
         {["day", "week", "month"].map((v) => (
-          <button
+          <Link
             key={v}
-            onClick={() => setView(v as ViewMode)}
+            to={`?view=${v}`}
             className={`px-6 py-3 rounded-2xl text-xl lg:text-2xl transition-colors ${
               view === v ? "bg-blue-600" : "bg-slate-800 hover:bg-slate-700"
             }`}
           >
             {v.toUpperCase()}
-          </button>
+          </Link>
         ))}
       </div>
 
