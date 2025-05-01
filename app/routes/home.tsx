@@ -281,18 +281,57 @@ export default function EmployeePerformanceDashboard() {
       console.error("Employees data is not an array:", employees);
       return [];
     }
+    
+    // Calculate the start date for the current view
+    const today = new Date();
+    let startDate: Date;
+    
+    // Set start date based on view
+    if (view === "day") {
+      startDate = new Date(today);
+      startDate.setHours(0, 0, 0, 0);
+    } else if (view === "week") {
+      startDate = new Date(today);
+      const dayOfWeek = startDate.getDay();
+      const diff = startDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+      startDate.setDate(diff);
+      startDate.setHours(0, 0, 0, 0);
+    } else { // month
+      startDate = new Date(today);
+      startDate.setDate(1);
+      startDate.setHours(0, 0, 0, 0);
+    }
+    
+    // Set end date to end of current period
+    const endDate = new Date();
+    if (view === "day") {
+      endDate.setHours(23, 59, 59, 999);
+    } else if (view === "week") {
+      const endOfWeek = new Date(startDate);
+      endOfWeek.setDate(startDate.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      endDate.setTime(endOfWeek.getTime());
+    } else { // month
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endOfMonth.setHours(23, 59, 59, 999);
+      endDate.setTime(endOfMonth.getTime());
+    }
+    
     employees.forEach((e) => {
       if (Array.isArray(e.trendPoints)) {
         e.trendPoints.forEach((pt) => {
           if (pt.timestamp && typeof pt.score === "number") {
             try {
-              const ts = new Date(pt.timestamp).getTime();
-              if (!isNaN(ts)) {
+              const timestamp = new Date(pt.timestamp);
+              const ts = timestamp.getTime();
+              
+              // Only include points within the current view period
+              if (!isNaN(ts) && timestamp >= startDate && timestamp <= endDate) {
                 pointsMap[ts] = pointsMap[ts] || { total: 0, count: 0 };
                 pointsMap[ts].total += pt.score;
                 pointsMap[ts].count += 1;
               } else {
-                console.warn("Invalid timestamp format:", pt.timestamp);
+                // Skip points outside the current view period
               }
             } catch (error) {
               console.error("Error parsing timestamp:", pt.timestamp, error);
@@ -305,6 +344,7 @@ export default function EmployeePerformanceDashboard() {
         // console.warn("Employee missing trendPoints array:", e);
       }
     });
+    
     const calculatedTrendData = Object.entries(pointsMap)
       .map(([ts, { total, count }]) => ({
         ts: Number(ts),
@@ -362,15 +402,35 @@ export default function EmployeePerformanceDashboard() {
             const today = new Date();
             
             if (view === "day") {
-              return `${today.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+              // For day view: show today's date
+              return `Today (${today.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })})`;
             } else if (view === "week") {
+              // For week view: start of current week to end of current week
               const startOfWeek = new Date(today);
               const dayOfWeek = startOfWeek.getDay();
               const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
               startOfWeek.setDate(diff);
-              return `Week starting ${startOfWeek.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+              startOfWeek.setHours(0, 0, 0, 0);
+              
+              const endOfWeek = new Date(startOfWeek);
+              endOfWeek.setDate(startOfWeek.getDate() + 6);
+              endOfWeek.setHours(23, 59, 59, 999);
+              
+              // Use consistent date format
+              const dateFormat = { day: '2-digit', month: '2-digit', year: 'numeric' };
+              return `Week (${startOfWeek.toLocaleDateString('en-GB', dateFormat)} - ${endOfWeek.toLocaleDateString('en-GB', dateFormat)})`;
             } else {
-              return `Month of ${today.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}`;
+              // For month view: start of current month to end of current month
+              const startOfMonth = new Date(today);
+              startOfMonth.setDate(1);
+              startOfMonth.setHours(0, 0, 0, 0);
+              
+              const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+              endOfMonth.setHours(23, 59, 59, 999);
+              
+              // Use consistent date format
+              const dateFormat = { day: '2-digit', month: '2-digit', year: 'numeric' };
+              return `Month (${startOfMonth.toLocaleDateString('en-GB', dateFormat)} - ${endOfMonth.toLocaleDateString('en-GB', dateFormat)})`;
             }
           })()}
         </h2>
@@ -515,17 +575,59 @@ export default function EmployeePerformanceDashboard() {
             />
             <XAxis
               dataKey="ts"
-              tickFormatter={(ts) =>
-                new Date(ts).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              }
+              tickFormatter={(ts) => {
+                const date = new Date(ts);
+                
+                // Format based on current view
+                if (view === "day") {
+                  return date.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  });
+                } else if (view === "week") {
+                  return date.toLocaleDateString([], {
+                    weekday: "short",
+                    month: "numeric",
+                    day: "numeric"
+                  });
+                } else { // month
+                  return date.toLocaleDateString([], {
+                    month: "numeric",
+                    day: "numeric"
+                  });
+                }
+              }}
               stroke="#aaa"
             />
             <YAxis domain={[0, "auto"]} stroke="#aaa" />
             <Tooltip
-              labelFormatter={(ts) => new Date(Number(ts)).toLocaleString()}
+              labelFormatter={(ts) => {
+                const date = new Date(Number(ts));
+                
+                // Format tooltip based on current view
+                if (view === "day") {
+                  return date.toLocaleString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                  });
+                } else if (view === "week") {
+                  return date.toLocaleString([], {
+                    weekday: "long",
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  });
+                } else { // month
+                  return date.toLocaleString([], {
+                    month: "long",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  });
+                }
+              }}
               contentStyle={{
                 background: "#1e293b",
                 border: "none",
