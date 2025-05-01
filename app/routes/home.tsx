@@ -25,13 +25,6 @@ import { useSSE } from "~/hooks/useSSE"; // Import the SSE hook
 
 type ViewMode = "day" | "week" | "month";
 
-interface TrendPoint {
-  id: number;
-  employeeId: number;
-  timestamp: string;
-  score: number;
-}
-
 interface Score {
   id: number;
   employeeId: number;
@@ -44,7 +37,6 @@ interface Employee {
   name: string;
   wrongNumbers: number;
   scores: Score[];
-  trendPoints: TrendPoint[];
   processedScores?: {
     day: number;
     week: number;
@@ -102,11 +94,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
           timestamp: "desc",
         },
       },
-      trendPoints: {
-        orderBy: {
-          timestamp: "asc",
-        },
-      },
     },
   });
 
@@ -143,10 +130,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     scores: emp.scores.map(score => ({
       ...score,
       timestamp: score.timestamp.toString()
-    })),
-    trendPoints: emp.trendPoints.map(point => ({
-      ...point,
-      timestamp: point.timestamp.toString()
     }))
   }));
 
@@ -276,7 +259,9 @@ export default function EmployeePerformanceDashboard() {
   };
 
   const trendData = (() => {
+    // Initialize the map to aggregate scores by timestamp
     const pointsMap: Record<string, { total: number; count: number }> = {};
+    
     if (!Array.isArray(employees)) {
       console.error("Employees data is not an array:", employees);
       return [];
@@ -317,34 +302,70 @@ export default function EmployeePerformanceDashboard() {
       endDate.setTime(endOfMonth.getTime());
     }
     
-    employees.forEach((e) => {
-      if (Array.isArray(e.trendPoints)) {
-        e.trendPoints.forEach((pt) => {
-          if (pt.timestamp && typeof pt.score === "number") {
-            try {
-              const timestamp = new Date(pt.timestamp);
-              const ts = timestamp.getTime();
-              
-              // Only include points within the current view period
-              if (!isNaN(ts) && timestamp >= startDate && timestamp <= endDate) {
-                pointsMap[ts] = pointsMap[ts] || { total: 0, count: 0 };
-                pointsMap[ts].total += pt.score;
-                pointsMap[ts].count += 1;
-              } else {
-                // Skip points outside the current view period
-              }
-            } catch (error) {
-              console.error("Error parsing timestamp:", pt.timestamp, error);
-            }
-          } else {
-            console.warn("Invalid trend point data:", pt);
-          }
-        });
-      } else {
-        // console.warn("Employee missing trendPoints array:", e);
+    // Process each employee's scores
+    employees.forEach((employee) => {
+      if (!Array.isArray(employee.scores)) {
+        return; // Skip if scores is not an array
       }
+      
+      // Use a map to track running score totals by timestamp bucket
+      const runningTotalsByTime: Record<string, number> = {};
+      
+      // Sort scores by timestamp ascending to process chronologically
+      const sortedScores = [...employee.scores].sort((a, b) => 
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      
+      let runningTotal = 0;
+      
+      // Process each score
+      sortedScores.forEach((score) => {
+        if (score.timestamp && typeof score.score === "number") {
+          try {
+            const timestamp = new Date(score.timestamp);
+            
+            // Only include scores within the current view period
+            if (timestamp >= startDate && timestamp <= endDate) {
+              // Add this score to the running total
+              runningTotal += score.score;
+              
+              // Round to 5 minute intervals for trend points to reduce noise
+              let bucketTime: Date;
+              if (view === "day") {
+                // For day view, create 5-minute buckets
+                bucketTime = new Date(timestamp);
+                bucketTime.setMinutes(Math.floor(bucketTime.getMinutes() / 5) * 5, 0, 0);
+              } else if (view === "week") {
+                // For week view, create 2-hour buckets
+                bucketTime = new Date(timestamp);
+                bucketTime.setHours(Math.floor(bucketTime.getHours() / 2) * 2, 0, 0, 0);
+              } else { // month
+                // For month view, create daily buckets
+                bucketTime = new Date(timestamp);
+                bucketTime.setHours(0, 0, 0, 0);
+              }
+              
+              const ts = bucketTime.getTime();
+              
+              // Store the current running total for this time bucket
+              runningTotalsByTime[ts] = Math.max(0, runningTotal);
+            }
+          } catch (error) {
+            console.error("Error processing score timestamp:", score.timestamp, error);
+          }
+        }
+      });
+      
+      // Add all the running totals to the points map
+      Object.entries(runningTotalsByTime).forEach(([ts, total]) => {
+        const numTs = Number(ts);
+        pointsMap[numTs] = pointsMap[numTs] || { total: 0, count: 0 };
+        pointsMap[numTs].total += total;
+        pointsMap[numTs].count += 1;
+      });
     });
     
+    // Calculate average scores and prepare final trend data
     const calculatedTrendData = Object.entries(pointsMap)
       .map(([ts, { total, count }]) => ({
         ts: Number(ts),

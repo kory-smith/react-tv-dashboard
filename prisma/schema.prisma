@@ -31,12 +31,11 @@ model User {
 }
 
 model Employee {
-  id           Int          @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   name         String
-  wrongNumbers Int          @default(0)
-  scores       Score[]      // Changed to one-to-many relationship
-  trendPoints  TrendPoint[]
-  user         User?        // Link back to the User model
+  wrongNumbers Int      @default(0)
+  scores       Score[]  // Changed to one-to-many relationship
+  user         User?    // Link back to the User model
 }
 
 model Score {
@@ -45,12 +44,4 @@ model Score {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   timestamp  DateTime @default(now())
   score      Int      @default(0)
-}
-
-model TrendPoint {
-  id         Int      @id @default(autoincrement())
-  employeeId Int
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  timestamp  DateTime @default(now())
-  score      Int
 }

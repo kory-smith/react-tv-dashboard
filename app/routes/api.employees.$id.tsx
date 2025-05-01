@@ -122,16 +122,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const newScore = scoresInPeriod.reduce((sum, score) => sum + score.score, 0);
       newValue = Math.max(0, newScore); // Ensure score doesn't go below 0
       
-      // If updating the day score, also add a trend point with the accumulated score
-      if (data.field === 'day') {
-        await db.trendPoint.create({
-          data: {
-            employeeId: id,
-            score: newValue, // Use the calculated accumulated score
-            timestamp: now,
-          },
-        });
-      }
+      // We no longer need to create trend points as they are calculated on the fly
       
       // Fetch the updated employee data to return consistently
       updatedData = await db.employee.findUnique({
