@@ -90,7 +90,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       
       // Calculate the new score value
       const currentScore = latestScore?.score ?? 0; // Default to 0 if no score exists
-      const newScore = Math.max(0, Math.min(100, currentScore + data.change));
+      const newScore = Math.max(0, currentScore + data.change); // Only limit the minimum to 0, no maximum limit
       
       // Create a new score entry
       await db.score.create({

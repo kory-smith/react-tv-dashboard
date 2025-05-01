@@ -229,11 +229,21 @@ export default function EmployeePerformanceDashboard() {
     return calculatedTrendData;
   })();
 
-  const scoreColor = (score: number) =>
-    score >= 75 ? "text-green-400" : score >= 60 ? "text-yellow-400" : "text-red-400";
+  const scoreColor = (score: number) => {
+    if (score >= 150) return "text-purple-400";
+    if (score >= 100) return "text-blue-400";
+    if (score >= 75) return "text-green-400";
+    if (score >= 60) return "text-yellow-400";
+    return "text-red-400";
+  };
 
-  const bgColor = (score: number) =>
-    score >= 75 ? "bg-green-700/50" : score >= 60 ? "bg-yellow-700/50" : "bg-red-700/50";
+  const bgColor = (score: number) => {
+    if (score >= 150) return "bg-purple-700/50";
+    if (score >= 100) return "bg-blue-700/50";
+    if (score >= 75) return "bg-green-700/50";
+    if (score >= 60) return "bg-yellow-700/50";
+    return "bg-red-700/50";
+  };
 
   return (
     <>
@@ -381,7 +391,7 @@ export default function EmployeePerformanceDashboard() {
               tickFormatter={(ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               stroke="#aaa"
             />
-            <YAxis domain={[0, 100]} stroke="#aaa" />
+            <YAxis domain={[0, 'auto']} stroke="#aaa" />
             <Tooltip
               labelFormatter={(ts) => new Date(Number(ts)).toLocaleString()}
               contentStyle={{ background: "#1e293b", border: "none", borderRadius: "0.75rem" }}
