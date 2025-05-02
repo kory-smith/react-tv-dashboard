@@ -13,6 +13,7 @@ import {
 import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { getUser, isAdmin, isManager } from "~/lib/auth.server";
 import { type User } from "@prisma/client";
+import { useEffect, useState } from "react";
 
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -49,6 +50,25 @@ export const links: Route.LinksFunction = () => [
 export function Layout({ children }: { children: React.ReactNode }) {
   // Explicitly type useLoaderData with LoaderData
   const { user, isAdmin, isManager } = useLoaderData<LoaderData>(); // Get user and flags
+  const [nextRefresh, setNextRefresh] = useState<Date | null>(null);
+
+  // Auto-refresh every 6 hours to prevent memory leaks
+  useEffect(() => {
+    const SIX_HOURS_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+    
+    // Calculate and set next refresh time
+    const refreshTime = new Date(Date.now() + SIX_HOURS_MS);
+    setNextRefresh(refreshTime);
+    
+    // Set up the timer for page refresh
+    const refreshTimer = setTimeout(() => {
+      console.log("Performing scheduled page refresh");
+      window.location.reload();
+    }, SIX_HOURS_MS);
+    
+    // Clean up timer on component unmount
+    return () => clearTimeout(refreshTimer);
+  }, []);
 
   // Helper to display role nicely
   const getRoleDisplay = (role: string | undefined) => {
@@ -135,6 +155,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <main className="px-4 sm:px-6 md:px-8">
             <Outlet context={{ user, isAdmin, isManager }} />
         </main>
+
+        {/* Auto-refresh indicator (small and unobtrusive) */}
+        {nextRefresh && (
+          <div className="fixed bottom-2 right-2 text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded">
+            Auto-refresh: {nextRefresh.toLocaleTimeString()}
+          </div>
+        )}
 
         <ScrollRestoration />
         <Scripts />
