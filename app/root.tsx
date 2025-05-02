@@ -102,6 +102,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <span className="sm:hidden">⛶</span>
             </button>
 
+            {/* Login button when not logged in */}
+            {!user && (
+              <Link
+                to="/login"
+                className="px-3 sm:px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm sm:text-base whitespace-nowrap"
+              >
+                Login
+              </Link>
+            )}
+
             {/* User Info & Logout */}
             {user && (
               <div className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-4 border-l border-slate-700/50">
