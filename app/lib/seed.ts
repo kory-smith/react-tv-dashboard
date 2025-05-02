@@ -1,54 +1,35 @@
 import { db } from "./db";
-
-const NAMES = [
-  "Alice",
-  "Bob",
-  "Charlie",
-  "Diana",
-  "Ethan",
-  "Fiona",
-  "George",
-  "Hannah",
-  "Ian",
-  "Julia",
-  "Kevin",
-  "Laura",
-  "Michael",
-  "Nancy",
-  "Oscar",
-  "Patricia",
-  "Quincy",
-  "Rachel",
-  "Steve",
-  "Tina",
-];
-
-const randomScore = () => Math.floor(Math.random() * 51) + 50; // 50-100
+import { hashPassword } from "./auth.server";
 
 async function seedDatabase() {
   console.log("🌱 Seeding database...");
   
+  // Verify admin password is set
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    console.error("❌ Error: ADMIN_PASSWORD environment variable is not set");
+    console.error("Please run the command with the ADMIN_PASSWORD environment variable:");
+    console.error("Example: ADMIN_PASSWORD=yourpassword bun run setup");
+    process.exit(1);
+  }
+  
   // Clear existing data
   await db.score.deleteMany();
   await db.employee.deleteMany();
+  await db.user.deleteMany();
   
-  // Create employees with scores
-  for (const name of NAMES) {
-    const scoreValue = randomScore();
-    
-    const employee = await db.employee.create({
-      data: {
-        name,
-        scores: {
-          create: {
-            score: scoreValue,
-            timestamp: new Date()
-          },
-        },
-      },
-    });
-  }
+  // Create admin user
+  const hashedAdminPassword = await hashPassword(adminPassword);
   
+  const admin = await db.user.create({
+    data: {
+      email: "kory@spook.software",
+      hashedPassword: hashedAdminPassword,
+      role: "ADMIN",
+    },
+  });
+  
+  console.log(`✅ Admin user created with email: ${admin.email}`);
   console.log("✅ Database seeded successfully!");
 }
 
