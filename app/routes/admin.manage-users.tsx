@@ -13,6 +13,7 @@ import { db } from "~/lib/db";
 import { Role, type User as PrismaUser } from "@prisma/client";
 import { requireUser, isAdmin } from "~/lib/auth.server";
 import bcrypt from 'bcrypt';
+import { emitter } from "~/lib/emitter.server";
 
 // Type for the data fetched by the loader
 interface DisplayUser {
@@ -203,6 +204,55 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
                 },
                 include: { employee: true } // Include employee to get ID
             });
+
+            // Get the complete employee data with processed scores for the SSE event
+            const completeEmployee = await db.employee.findUnique({
+                where: { id: newUser.employee!.id },
+                include: { scores: true }
+            });
+
+            if (completeEmployee) {
+                // Calculate processed scores for the new employee
+                const now = new Date();
+                const startOfDay = new Date(now);
+                startOfDay.setHours(0, 0, 0, 0);
+                
+                const startOfWeek = new Date(now);
+                const dayOfWeek = startOfWeek.getDay();
+                const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                startOfWeek.setDate(diff);
+                startOfWeek.setHours(0, 0, 0, 0);
+                
+                const startOfMonth = new Date(now);
+                startOfMonth.setDate(1);
+                startOfMonth.setHours(0, 0, 0, 0);
+                
+                const dayScores = completeEmployee.scores.filter(s => 
+                    new Date(s.timestamp) >= startOfDay
+                ).reduce((sum, score) => sum + score.score, 0);
+                
+                const weekScores = completeEmployee.scores.filter(s => 
+                    new Date(s.timestamp) >= startOfWeek
+                ).reduce((sum, score) => sum + score.score, 0);
+                
+                const monthScores = completeEmployee.scores.filter(s => 
+                    new Date(s.timestamp) >= startOfMonth
+                ).reduce((sum, score) => sum + score.score, 0);
+                
+                // Emit user_created event with full employee data
+                emitter.emit("user_created", {
+                    type: 'USER_CREATED',
+                    employee: {
+                        ...completeEmployee,
+                        processedScores: {
+                            day: dayScores,
+                            week: weekScores,
+                            month: monthScores
+                        }
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            }
 
             // Return created user data
             const returnUser: DisplayUser = {

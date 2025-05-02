@@ -157,47 +157,69 @@ export default function EmployeePerformanceDashboard() {
   useEffect(() => {
     if (lastEvent) {
       console.log("Processing SSE event:", lastEvent);
-      setEmployees((currentEmployees) => {
-        // Create a new array of employees (avoid mutating the previous state)
-        return currentEmployees.map((emp) => {
-          if (emp.id === lastEvent.employeeId) {
-            console.log(
-              `Updating employee ${emp.id} field ${lastEvent.field} to ${lastEvent.newValue}`
-            );
-            
-            // Create a new employee object with the updated field
-            const updatedEmp = { ...emp };
-            
-            if (lastEvent.field === "wrongNumbers") {
-              // Just update the wrong numbers count directly
-              updatedEmp.wrongNumbers = lastEvent.newValue;
-            } else if (updatedEmp.processedScores) {
-              // For score updates
-              if (["day", "week", "month"].includes(lastEvent.field)) {
-                // The server has already added the score entry in the database
-                // The SSE event contains the new total value 
-                
-                // Don't create a local score entry - this conflicts with actual DB state
-                // Instead, rely on a reload to fetch the latest scores from the server
-                
-                // Just update the processed score directly with the value from server
-                // When we receive an SSE event, the lastEvent.newValue is the new total
-                updatedEmp.processedScores = {
-                  ...updatedEmp.processedScores,
-                  [lastEvent.field]: lastEvent.newValue,
-                };
-              }
-            } else {
-              console.warn(
-                `Scores object not found for employee ${emp.id} during SSE update.`
+      
+      // Handle score updates
+      if (lastEvent.type === 'SCORE_UPDATE') {
+        setEmployees((currentEmployees) => {
+          // Create a new array of employees (avoid mutating the previous state)
+          return currentEmployees.map((emp) => {
+            if (emp.id === lastEvent.employeeId) {
+              console.log(
+                `Updating employee ${emp.id} field ${lastEvent.field} to ${lastEvent.newValue}`
               );
+              
+              // Create a new employee object with the updated field
+              const updatedEmp = { ...emp };
+              
+              if (lastEvent.field === "wrongNumbers") {
+                // Just update the wrong numbers count directly
+                updatedEmp.wrongNumbers = lastEvent.newValue;
+              } else if (updatedEmp.processedScores) {
+                // For score updates
+                if (["day", "week", "month"].includes(lastEvent.field)) {
+                  // The server has already added the score entry in the database
+                  // The SSE event contains the new total value 
+                  
+                  // Don't create a local score entry - this conflicts with actual DB state
+                  // Instead, rely on a reload to fetch the latest scores from the server
+                  
+                  // Just update the processed score directly with the value from server
+                  // When we receive an SSE event, the lastEvent.newValue is the new total
+                  updatedEmp.processedScores = {
+                    ...updatedEmp.processedScores,
+                    [lastEvent.field]: lastEvent.newValue,
+                  };
+                }
+              } else {
+                console.warn(
+                  `Scores object not found for employee ${emp.id} during SSE update.`
+                );
+              }
+              
+              return updatedEmp;
             }
-            
-            return updatedEmp;
-          }
-          return emp;
+            return emp;
+          });
         });
-      });
+      }
+      
+      // Handle user creation events
+      else if (lastEvent.type === 'USER_CREATED') {
+        setEmployees((currentEmployees) => {
+          // Check if the employee already exists in the current list
+          const employeeExists = currentEmployees.some(emp => emp.id === lastEvent.employee.id);
+          
+          if (employeeExists) {
+            console.log(`Employee ${lastEvent.employee.id} already exists in the dashboard.`);
+            return currentEmployees;
+          }
+          
+          console.log(`Adding new employee ${lastEvent.employee.name} to dashboard.`);
+          
+          // Add the new employee to the list
+          return [...currentEmployees, lastEvent.employee];
+        });
+      }
     }
   }, [lastEvent]);
 
@@ -337,12 +359,10 @@ export default function EmployeePerformanceDashboard() {
               startOfWeek.setHours(0, 0, 0, 0);
               
               const endOfWeek = new Date(startOfWeek);
-              endOfWeek.setDate(startOfWeek.getDate() + 6);
-              endOfWeek.setHours(23, 59, 59, 999);
+              endOfWeek.setDate(endOfWeek.getDate() + 6);
               
-              // Use consistent date format
-              const dateFormat = { day: '2-digit', month: '2-digit', year: 'numeric' };
-              return `Week (${startOfWeek.toLocaleDateString('en-GB', dateFormat)} - ${endOfWeek.toLocaleDateString('en-GB', dateFormat)})`;
+              // Format: "DD/MM/YYYY - DD/MM/YYYY"
+              return `Week (${startOfWeek.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${endOfWeek.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })})`;
             } else {
               // For month view: start of current month to end of current month
               const startOfMonth = new Date(today);
@@ -353,8 +373,7 @@ export default function EmployeePerformanceDashboard() {
               endOfMonth.setHours(23, 59, 59, 999);
               
               // Use consistent date format
-              const dateFormat = { day: '2-digit', month: '2-digit', year: 'numeric' };
-              return `Month (${startOfMonth.toLocaleDateString('en-GB', dateFormat)} - ${endOfMonth.toLocaleDateString('en-GB', dateFormat)})`;
+              return `Month (${startOfMonth.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${endOfMonth.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })})`;
             }
           })()}
         </h2>

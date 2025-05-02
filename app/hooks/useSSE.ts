@@ -9,9 +9,34 @@ interface ScoreUpdateData {
   timestamp: string;
 }
 
+// Define the structure of the user creation event data
+interface UserCreatedData {
+  type: 'USER_CREATED';
+  employee: {
+    id: number;
+    name: string;
+    wrongNumbers: number;
+    scores: {
+      id: number;
+      employeeId: number;
+      timestamp: string;
+      score: number;
+    }[];
+    processedScores: {
+      day: number;
+      week: number;
+      month: number;
+    };
+  };
+  timestamp: string;
+}
+
+// Combined event type
+type EventData = ScoreUpdateData | UserCreatedData;
+
 // Define the hook's return type
 interface UseSSEReturn {
-  lastEvent: ScoreUpdateData | null;
+  lastEvent: EventData | null;
   isConnected: boolean;
   error: Event | null;
 }
@@ -24,7 +49,7 @@ interface UseSSEReturn {
  * @returns An object containing the last received event, connection status, and any error.
  */
 export function useSSE(url: string): UseSSEReturn {
-  const [lastEvent, setLastEvent] = useState<ScoreUpdateData | null>(null);
+  const [lastEvent, setLastEvent] = useState<EventData | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [error, setError] = useState<Event | null>(null);
   // useRef to hold the EventSource instance to avoid recreating it on re-renders
@@ -64,6 +89,22 @@ export function useSSE(url: string): UseSSEReturn {
           }
         } catch (parseError) {
           console.error('Failed to parse SSE event data:', parseError, event.data);
+        }
+      });
+
+      // Listen for 'USER_CREATED' events
+      es.addEventListener('USER_CREATED', (event) => {
+        console.log('SSE USER_CREATED received:', event.data);
+        try {
+          const parsedData: UserCreatedData = JSON.parse(event.data);
+          // Basic validation of the received data
+          if (parsedData && parsedData.type === 'USER_CREATED' && parsedData.employee) {
+            setLastEvent(parsedData);
+          } else {
+            console.warn('Received invalid USER_CREATED data:', parsedData);
+          }
+        } catch (parseError) {
+          console.error('Failed to parse USER_CREATED event data:', parseError, event.data);
         }
       });
 

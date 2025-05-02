@@ -14,10 +14,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Listener for score updates
     emitter.on("score_update", handleEvent);
+    
+    // Listener for user creation
+    emitter.on("user_created", handleEvent);
 
     // Return cleanup function to remove listener when client disconnects
     return function clear() {
       emitter.off("score_update", handleEvent);
+      emitter.off("user_created", handleEvent);
     };
   });
 } 
