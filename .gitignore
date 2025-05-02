@@ -5,3 +5,7 @@
 /.react-router/
 /build/
 .env
+
+# Database
+/prisma/dev.db
+/prisma/dev.db-journal
