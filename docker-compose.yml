@@ -8,15 +8,17 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # For development: mount source code for hot reloading
-      - ./app:/app/app
-      - ./prisma:/app/prisma
-      - ./public:/app/public
+      # Persistent data volume for the database
+      - dashboard-data:/app/data
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - PORT=3000
       - SESSION_SECRET=development-secret-key-for-sessions
       - ADMIN_PASSWORD=admin-dev-password
-    command: >
-      sh -c "bunx prisma migrate dev --name init && bunx prisma generate && bun app/lib/seed.ts && bun run start"
+      - DATABASE_URL=file:/app/data/dev.db
+    # No need for command override as we're using the entrypoint script
     restart: unless-stopped
+
+volumes:
+  dashboard-data:
+    # Named volume for data persistence

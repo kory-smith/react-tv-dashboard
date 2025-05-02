@@ -21,14 +21,18 @@ COPY . .
 # Build the application
 RUN bun run build
 
-# Setup database
-RUN bunx prisma generate
+# Make entrypoint script executable
+RUN chmod +x ./scripts/docker-entrypoint.sh
 
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV SESSION_SECRET="change-me-in-production-this-is-just-a-default-secret"
 ENV ADMIN_PASSWORD="change-me-in-production-default-admin-password"
+ENV DATABASE_URL="file:/app/data/dev.db"
+
+# Create volume for persistent data
+VOLUME /app/data
 
 # Expose the port
 EXPOSE 3000
@@ -37,5 +41,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-# Run setup and start the server with npm script
-CMD ["sh", "-c", "bunx prisma migrate deploy && bun app/lib/seed.ts && bun run start"]
+# Use the entrypoint script
+ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
