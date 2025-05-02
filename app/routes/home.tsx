@@ -42,6 +42,9 @@ interface Employee {
     week: number;
     month: number;
   };
+  user?: {
+    role: Role;
+  };
 }
 
 // --- Context Type ---
@@ -82,10 +85,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
   startOfMonth.setHours(0, 0, 0, 0);
 
   const employees = await db.employee.findMany({
-    // Filter to include only employees linked to a user with the EMPLOYEE role
+    // Filter to include employees and managers
     where: {
       user: {
-        role: Role.EMPLOYEE,
+        role: {
+          in: [Role.EMPLOYEE, Role.MANAGER],
+        },
       },
     },
     include: {
@@ -93,6 +98,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         orderBy: {
           timestamp: "desc",
         },
+      },
+      user: {
+        select: {
+          role: true,
+        }
       },
     },
   });
@@ -412,6 +422,12 @@ export default function EmployeePerformanceDashboard() {
                 key={emp.id}
                 className={`rounded-3xl p-6 flex flex-col items-center justify-center ${currentBgColor} relative transition-colors duration-300 ease-in-out`}
               >
+                {/* Manager badge */}
+                {emp.user?.role === Role.MANAGER && (
+                  <span className="absolute top-2 left-2 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                    Manager
+                  </span>
+                )}
                 {/* Remove employee button (Show only for Admins via context flag) */}
                 {/* {isAdmin && (
                   <button
