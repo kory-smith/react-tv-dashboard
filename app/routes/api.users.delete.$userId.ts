@@ -4,7 +4,7 @@ import { requireUser, isAdmin } from "~/lib/auth.server";
 
 /**
  * DELETE /api/users/delete/:userId
- * Action function: Deletes a user and their associated data (employee, scores, trends).
+ * Action function: Deletes a user and their associated data (employee, scores).
  * Requires ADMIN role.
  */
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -40,7 +40,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }
 
         // Attempt to delete the user
-        // Cascading delete should handle related Employee, Score, TrendPoint
+        // Cascading delete should handle related Employee, Score
         await db.user.delete({
             where: { id: userIdToDelete },
         });

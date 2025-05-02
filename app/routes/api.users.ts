@@ -114,21 +114,10 @@ export async function action({ request }: ActionFunctionArgs) {
                     },
                 },
             },
-            include: { // Include the employee to get the ID for trend points
-                 employee: true 
+            include: { // Include the employee to get the ID
+                employee: true 
             }
         });
-
-        // Create initial trend points for the new employee
-        if (newUser.employeeId && newUser.employee) { // Check if employee was created and linked
-             const now = Date.now();
-             const trendPoints = Array.from({ length: 24 }, (_, i) => ({
-                 employeeId: newUser.employeeId!, // Use the linked employeeId
-                 timestamp: new Date(now - (23 - i) * 3600_000),
-                 score: 75, // Initial score
-             }));
-             await db.trendPoint.createMany({ data: trendPoints });
-        }
 
         // Return only necessary fields
         return json({

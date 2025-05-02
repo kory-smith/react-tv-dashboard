@@ -204,17 +204,6 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
                 include: { employee: true } // Include employee to get ID
             });
 
-            // Create initial trend points
-            if (newUser.employeeId && newUser.employee) { 
-                 const now = Date.now();
-                 const trendPoints = Array.from({ length: 24 }, (_, i) => ({
-                     employeeId: newUser.employeeId!,
-                     timestamp: new Date(now - (23 - i) * 3600_000),
-                     score: 75,
-                 }));
-                 await db.trendPoint.createMany({ data: trendPoints });
-            }
-
             // Return created user data
             const returnUser: DisplayUser = {
                 id: newUser.id,

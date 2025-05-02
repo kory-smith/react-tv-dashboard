@@ -157,62 +157,34 @@ export default function EmployeePerformanceDashboard() {
   useEffect(() => {
     if (lastEvent) {
       console.log("Processing SSE event:", lastEvent);
-      setEmployees((currentEmployees) =>
-        currentEmployees.map((emp) => {
+      setEmployees((currentEmployees) => {
+        // Create a new array of employees (avoid mutating the previous state)
+        return currentEmployees.map((emp) => {
           if (emp.id === lastEvent.employeeId) {
             console.log(
               `Updating employee ${emp.id} field ${lastEvent.field} to ${lastEvent.newValue}`
             );
+            
             // Create a new employee object with the updated field
             const updatedEmp = { ...emp };
+            
             if (lastEvent.field === "wrongNumbers") {
+              // Just update the wrong numbers count directly
               updatedEmp.wrongNumbers = lastEvent.newValue;
             } else if (updatedEmp.processedScores) {
-              // For score updates, update scores for all time periods
-              // This ensures that when switching views, the latest score is always displayed
+              // For score updates
               if (["day", "week", "month"].includes(lastEvent.field)) {
-                // Create a new score entry with the latest timestamp
-                const newScore = {
-                  id: Date.now(), // Use a temporary ID
-                  employeeId: emp.id,
-                  timestamp: new Date().toISOString(),
-                  score: lastEvent.newValue,
-                };
+                // The server has already added the score entry in the database
+                // The SSE event contains the new total value 
                 
-                // Add the new score to the beginning of the scores array
-                updatedEmp.scores = [newScore, ...emp.scores];
+                // Don't create a local score entry - this conflicts with actual DB state
+                // Instead, rely on a reload to fetch the latest scores from the server
                 
-                // Calculate which time periods this score update affects
-                const now = new Date();
-                const scoreTime = new Date(newScore.timestamp);
-                
-                // Get the start of day, week, and month
-                const startOfDay = new Date(now);
-                startOfDay.setHours(0, 0, 0, 0);
-                
-                const startOfWeek = new Date(now);
-                const dayOfWeek = startOfWeek.getDay();
-                const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-                startOfWeek.setDate(diff);
-                startOfWeek.setHours(0, 0, 0, 0);
-                
-                const startOfMonth = new Date(now);
-                startOfMonth.setDate(1);
-                startOfMonth.setHours(0, 0, 0, 0);
-                
-                // Check which time periods the score falls within
-                const isWithinDay = scoreTime >= startOfDay;
-                const isWithinWeek = scoreTime >= startOfWeek;
-                const isWithinMonth = scoreTime >= startOfMonth;
-                
-                // When we receive an SSE event, the lastEvent.newValue is already the total sum
-                // calculated on the server side, so we directly set it (don't add to existing)
+                // Just update the processed score directly with the value from server
+                // When we receive an SSE event, the lastEvent.newValue is the new total
                 updatedEmp.processedScores = {
                   ...updatedEmp.processedScores,
-                  // Update with the new total score value from the server
-                  day: lastEvent.field === "day" ? lastEvent.newValue : updatedEmp.processedScores.day,
-                  week: lastEvent.field === "week" ? lastEvent.newValue : updatedEmp.processedScores.week,
-                  month: lastEvent.field === "month" ? lastEvent.newValue : updatedEmp.processedScores.month,
+                  [lastEvent.field]: lastEvent.newValue,
                 };
               }
             } else {
@@ -220,11 +192,12 @@ export default function EmployeePerformanceDashboard() {
                 `Scores object not found for employee ${emp.id} during SSE update.`
               );
             }
+            
             return updatedEmp;
           }
           return emp;
-        })
-      );
+        });
+      });
     }
   }, [lastEvent]);
 
@@ -259,9 +232,6 @@ export default function EmployeePerformanceDashboard() {
   };
 
   const trendData = (() => {
-    // Initialize the map to aggregate scores by timestamp
-    const pointsMap: Record<string, { total: number; count: number }> = {};
-    
     if (!Array.isArray(employees)) {
       console.error("Employees data is not an array:", employees);
       return [];
@@ -287,93 +257,26 @@ export default function EmployeePerformanceDashboard() {
       startDate.setHours(0, 0, 0, 0);
     }
     
-    // Set end date to end of current period
-    const endDate = new Date();
-    if (view === "day") {
-      endDate.setHours(23, 59, 59, 999);
-    } else if (view === "week") {
-      const endOfWeek = new Date(startDate);
-      endOfWeek.setDate(startDate.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-      endDate.setTime(endOfWeek.getTime());
-    } else { // month
-      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      endOfMonth.setHours(23, 59, 59, 999);
-      endDate.setTime(endOfMonth.getTime());
-    }
+    // Very simple approach: just use processedScores to get the current total
+    let currentTotal = 0;
     
-    // Process each employee's scores
-    employees.forEach((employee) => {
-      if (!Array.isArray(employee.scores)) {
-        return; // Skip if scores is not an array
-      }
-      
-      // Use a map to track running score totals by timestamp bucket
-      const runningTotalsByTime: Record<string, number> = {};
-      
-      // Sort scores by timestamp ascending to process chronologically
-      const sortedScores = [...employee.scores].sort((a, b) => 
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      );
-      
-      let runningTotal = 0;
-      
-      // Process each score
-      sortedScores.forEach((score) => {
-        if (score.timestamp && typeof score.score === "number") {
-          try {
-            const timestamp = new Date(score.timestamp);
-            
-            // Only include scores within the current view period
-            if (timestamp >= startDate && timestamp <= endDate) {
-              // Add this score to the running total
-              runningTotal += score.score;
-              
-              // Round to 5 minute intervals for trend points to reduce noise
-              let bucketTime: Date;
-              if (view === "day") {
-                // For day view, create 5-minute buckets
-                bucketTime = new Date(timestamp);
-                bucketTime.setMinutes(Math.floor(bucketTime.getMinutes() / 5) * 5, 0, 0);
-              } else if (view === "week") {
-                // For week view, create 2-hour buckets
-                bucketTime = new Date(timestamp);
-                bucketTime.setHours(Math.floor(bucketTime.getHours() / 2) * 2, 0, 0, 0);
-              } else { // month
-                // For month view, create daily buckets
-                bucketTime = new Date(timestamp);
-                bucketTime.setHours(0, 0, 0, 0);
-              }
-              
-              const ts = bucketTime.getTime();
-              
-              // Store the current running total for this time bucket
-              runningTotalsByTime[ts] = Math.max(0, runningTotal);
-            }
-          } catch (error) {
-            console.error("Error processing score timestamp:", score.timestamp, error);
-          }
-        }
-      });
-      
-      // Add all the running totals to the points map
-      Object.entries(runningTotalsByTime).forEach(([ts, total]) => {
-        const numTs = Number(ts);
-        pointsMap[numTs] = pointsMap[numTs] || { total: 0, count: 0 };
-        pointsMap[numTs].total += total;
-        pointsMap[numTs].count += 1;
-      });
+    // Sum all employees' processed scores for the current view
+    employees.forEach(employee => {
+      const empScore = employee.processedScores?.[view] || 0;
+      currentTotal += empScore;
     });
     
-    // Calculate average scores and prepare final trend data
-    const calculatedTrendData = Object.entries(pointsMap)
-      .map(([ts, { total, count }]) => ({
-        ts: Number(ts),
-        score: count > 0 ? total / count : 0,
-      }))
-      .sort((a, b) => a.ts - b.ts);
-
-    return calculatedTrendData;
+    // Create just two points - one at start (0) and one at current time (with total)
+    return [
+      {
+        ts: startDate.getTime(),
+        score: 0
+      },
+      {
+        ts: new Date().getTime(),
+        score: currentTotal
+      }
+    ];
   })();
 
   const scoreColor = (score: number) => {
@@ -582,7 +485,7 @@ export default function EmployeePerformanceDashboard() {
 
       {/* Trend Chart */}
       <h2 className="text-3xl lg:text-4xl font-semibold mb-4 select-none">
-        Average Trend
+        Total Numbers Trend
       </h2>
       <div className="h-80 w-full bg-slate-800/50 rounded-3xl p-4">
         <ResponsiveContainer width="100%" height="100%">
@@ -649,6 +552,7 @@ export default function EmployeePerformanceDashboard() {
                   });
                 }
               }}
+              formatter={(value) => [`Total: ${value}`, 'Numbers']} // Custom formatter to show "Total: X" instead of just "X"
               contentStyle={{
                 background: "#1e293b",
                 border: "none",

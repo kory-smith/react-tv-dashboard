@@ -5,11 +5,6 @@ export async function loader() {
   const employees = await db.employee.findMany({
     include: {
       scores: true,
-      trendPoints: {
-        orderBy: {
-          timestamp: "asc",
-        },
-      },
     },
   });
 

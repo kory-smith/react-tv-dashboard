@@ -77,29 +77,6 @@ async function main() {
             });
             // Use optional chaining for safer logging
             console.log(`Created employee user: ${user.email} linked to employee: ${user.employee?.name ?? '(employee data missing)'}`);
-
-            // Create initial trend points for the new employee
-            // Use type guards to safely access nested properties
-            // Ensure user, employee, and scores are not null before proceeding
-            if (user && user.employeeId && user.employee && user.employee.scores) {
-                // Assign to constants to help TS track non-null types
-                const currentEmployee = user.employee;
-                const currentScores = user.employee.scores;
-                const employeeId = user.employeeId; // Already checked non-null via user.employeeId
-                
-                // Use the score from the first entry (if available) or default to 0
-                const initialScore = currentScores.length > 0 ? currentScores[0].score : 0;
-
-                const now = Date.now();
-                const trendPoints = Array.from({ length: 24 }, (_, i) => ({
-                    employeeId: employeeId, // Guaranteed non-null
-                    timestamp: new Date(now - (23 - i) * 3600_000),
-                    score: initialScore, // Use the score from the first entry
-                }));
-                await prisma.trendPoint.createMany({ data: trendPoints });
-                console.log(`Created initial trend points for ${currentEmployee.name}`); // Use non-null constant
-            }
-
         } catch (error) {
             console.error(`Failed to create user ${mock.email}:`, error);
         }
