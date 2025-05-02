@@ -23,7 +23,7 @@ async function seedDatabase() {
   
   const admin = await db.user.create({
     data: {
-      email: "kory@spook.software",
+      email: "you@example.com",
       hashedPassword: hashedAdminPassword,
       role: "ADMIN",
     },
