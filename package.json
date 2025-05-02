@@ -7,7 +7,7 @@
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
-    "setup": "bunx prisma migrate dev && bun scripts/check-db-empty.ts && bun app/lib/seed.ts"
+    "setup": "bun run build && bunx prisma migrate dev && bun scripts/check-db-empty.ts && bun app/lib/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",
