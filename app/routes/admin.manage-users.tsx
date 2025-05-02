@@ -11,8 +11,7 @@ import {
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs, redirect } from "@remix-run/node"; // Keep node imports for loader/action
 import { db } from "~/lib/db";
 import { Role, type User as PrismaUser } from "@prisma/client";
-import { requireUser, isAdmin } from "~/lib/auth.server";
-import bcrypt from 'bcrypt';
+import { requireUser, isAdmin, hashPassword } from "~/lib/auth.server";
 import { emitter } from "~/lib/emitter.server";
 
 // Type for the data fetched by the loader
@@ -180,8 +179,8 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
                 return json({ error: `Employee with name ${name} already exists.`, formValues: body } satisfies ActionData, { status: 409 }); // 409 Conflict
             }
 
-            // Hash password
-            const hashedPassword = await bcrypt.hash(password, 10);
+            // Hash password using function from auth.server.ts
+            const hashedPassword = await hashPassword(password);
 
             // Create User and linked Employee directly
             const newUser = await db.user.create({
@@ -307,8 +306,8 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
         }
 
         try {
-            // Hash the new password
-            const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+            // Hash the new password using function from auth.server.ts
+            const hashedNewPassword = await hashPassword(newPassword);
 
             // Update the user's password
             await db.user.update({
