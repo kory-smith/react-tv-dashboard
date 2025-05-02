@@ -1,5 +1,4 @@
 import {
-  isRouteErrorResponse,
   Links,
   Meta,
   Outlet,
@@ -7,7 +6,9 @@ import {
   ScrollRestoration,
   useLoaderData,
   Form,
-  Link
+  Link,
+  useRouteError,
+  isRouteErrorResponse
 } from "react-router";
 import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { getUser, isAdmin, isManager } from "~/lib/auth.server";
@@ -107,7 +108,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <span className="text-sm sm:text-base text-slate-300 whitespace-nowrap">
                   {user.email} <span className="text-xs sm:text-sm text-slate-400">{getRoleDisplay(user.role)}</span>
                 </span>
-                <Form action="/api/logout" method="post">
+                <Form action="/api/logout" method="post" reloadDocument>
                   <button 
                     type="submit"
                     className="px-3 sm:px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm sm:text-base whitespace-nowrap"
@@ -136,7 +137,9 @@ export default function App() {
   return <Outlet />;
 }
 
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+export function ErrorBoundary() {
+  const error = useRouteError();
+  
   let message = "Oops!";
   let details = "An unexpected error occurred.";
   let stack: string | undefined;
@@ -147,7 +150,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       error.status === 404
         ? "The requested page could not be found."
         : error.statusText || details;
-  } else if (import.meta.env.DEV && error && error instanceof Error) {
+  } else if (import.meta.env.DEV && error instanceof Error) {
     details = error.message;
     stack = error.stack;
   }
