@@ -6,13 +6,108 @@ echo " React TV Dashboard Startup Script"
 echo "==================================="
 echo ""
 
+install_docker_mac() {
+  echo "Attempting to install Docker on macOS..."
+  if command -v brew &> /dev/null; then
+    echo "Installing Docker using Homebrew..."
+    brew install --cask docker
+    echo "Docker Desktop installed. Please open Docker Desktop application and follow setup."
+    echo "Then run this script again."
+    read -p "Press Enter to exit..."
+    exit 0
+  else
+    echo "Homebrew not found. Installing Homebrew first..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    if [ $? -eq 0 ]; then
+      echo "Homebrew installed. Installing Docker Desktop..."
+      brew install --cask docker
+      echo "Docker Desktop installed. Please open Docker Desktop application and follow setup."
+      echo "Then run this script again."
+    else
+      echo "Failed to install Homebrew. Please install Docker Desktop manually from:"
+      echo "https://www.docker.com/products/docker-desktop"
+    fi
+    read -p "Press Enter to exit..."
+    exit 0
+  fi
+}
+
+install_docker_linux() {
+  echo "Attempting to install Docker on Linux..."
+  # Try to detect the Linux distribution
+  if command -v apt-get &> /dev/null; then
+    # Debian/Ubuntu
+    echo "Detected Debian/Ubuntu. Installing Docker..."
+    sudo apt-get update
+    sudo apt-get install -y docker.io
+    sudo systemctl enable --now docker
+    sudo usermod -aG docker $USER
+    echo "Docker installed. You may need to log out and back in for group changes to take effect."
+  elif command -v dnf &> /dev/null; then
+    # Fedora/RHEL/CentOS
+    echo "Detected Fedora/RHEL/CentOS. Installing Docker..."
+    sudo dnf -y install dnf-plugins-core
+    sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+    sudo dnf -y install docker-ce docker-ce-cli containerd.io
+    sudo systemctl enable --now docker
+    sudo usermod -aG docker $USER
+    echo "Docker installed. You may need to log out and back in for group changes to take effect."
+  else
+    echo "Could not detect package manager. Please install Docker manually from:"
+    echo "https://docs.docker.com/engine/install/"
+    read -p "Press Enter to exit..."
+    exit 1
+  fi
+  echo "Please restart this script after logging out and back in."
+  read -p "Press Enter to exit..."
+  exit 0
+}
+
+install_git() {
+  echo "Attempting to install Git..."
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    if command -v brew &> /dev/null; then
+      brew install git
+    else
+      echo "Homebrew not found. Please install Git manually from:"
+      echo "https://git-scm.com/download/mac"
+      read -p "Press Enter to exit..."
+      exit 1
+    fi
+  else
+    # Linux
+    if command -v apt-get &> /dev/null; then
+      sudo apt-get update
+      sudo apt-get install -y git
+    elif command -v dnf &> /dev/null; then
+      sudo dnf install -y git
+    else
+      echo "Could not detect package manager. Please install Git manually from:"
+      echo "https://git-scm.com/download/linux"
+      read -p "Press Enter to exit..."
+      exit 1
+    fi
+  fi
+  echo "Git installed successfully."
+}
+
+# Check if Git is installed
+if ! command -v git &> /dev/null; then
+  echo "Git is not installed."
+  install_git
+fi
+
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
   echo "Docker is not installed or not in your PATH!"
-  echo "Please install Docker from https://www.docker.com/products/docker-desktop"
-  echo ""
-  read -p "Press Enter to exit..."
-  exit 1
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    install_docker_mac
+  else
+    # Linux
+    install_docker_linux
+  fi
 fi
 
 # Check Docker service

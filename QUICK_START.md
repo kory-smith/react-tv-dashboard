@@ -4,10 +4,14 @@ This guide provides simple instructions for running the React TV Dashboard appli
 
 ## Prerequisites
 
-You must have Docker installed on your computer:
-- Windows: [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/)
-- Mac: [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/)
-- Linux: [Docker Engine](https://docs.docker.com/engine/install/)
+**The startup scripts will automatically install these for you if needed:**
+- Docker 
+- Git
+
+System requirements:
+- Windows 10 (1903 or higher) or Windows 11 
+- macOS 10.15 (Catalina) or higher
+- Most modern Linux distributions (Ubuntu 20.04+, Debian 11+, Fedora 35+, etc.)
 
 ## Starting the Dashboard (One-Click)
 

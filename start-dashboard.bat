@@ -4,15 +4,50 @@ echo  React TV Dashboard Startup Script
 echo ===================================
 echo.
 
+REM Check if winget is available
+WHERE winget >nul 2>nul
+IF %ERRORLEVEL% NEQ 0 (
+  echo Windows Package Manager (winget) is not available on this system.
+  echo You need Windows 10 May 2020 Update (2004) or later with App Installer.
+  echo Please install Docker Desktop and Git manually.
+  echo Docker: https://www.docker.com/products/docker-desktop
+  echo Git: https://git-scm.com/download/win
+  echo.
+  pause
+  goto check_installations
+)
+
+REM Check if Git is installed
+WHERE git >nul 2>nul
+IF %ERRORLEVEL% NEQ 0 (
+  echo Git is not installed. Attempting to install Git using winget...
+  winget install --id Git.Git -e --silent
+  IF %ERRORLEVEL% NEQ 0 (
+    echo Failed to install Git. Please install it manually from https://git-scm.com/download/win
+  ) ELSE (
+    echo Git installed successfully.
+    echo Please restart this script for changes to take effect.
+    pause
+    exit /b 0
+  )
+)
+
 REM Check if Docker is installed
 WHERE docker >nul 2>nul
 IF %ERRORLEVEL% NEQ 0 (
-  echo Docker is not installed or not in your PATH!
-  echo Please install Docker Desktop from https://www.docker.com/products/docker-desktop
-  echo.
-  pause
-  exit /b 1
+  echo Docker is not installed. Attempting to install Docker Desktop using winget...
+  winget install --id Docker.DockerDesktop -e
+  IF %ERRORLEVEL% NEQ 0 (
+    echo Failed to install Docker Desktop. Please install it manually from https://www.docker.com/products/docker-desktop
+  ) ELSE (
+    echo Docker Desktop installed successfully.
+    echo Please restart your computer, then run this script again.
+    pause
+    exit /b 0
+  )
 )
+
+:check_installations
 
 REM Check Docker service
 docker info >nul 2>nul
